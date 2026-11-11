@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SQL Arena</title>
+<meta name="description" content="Treine SQL escrevendo consultas reais: campanha por fases, caça-bugs, modo relâmpago e playground.">
+<meta name="theme-color" content="#0e1422">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: bancada de trabalho. Navegação fixa (topo no desktop, base no celular);
+   a fase divide a tela em enunciado/esquema à esquerda e editor/resultado à direita. */
+:root{
+  --bg:#eef1f7; --surface:#ffffff; --surface2:#e4e9f3; --line:#cdd5e4;
+  --ink:#131a2b; --muted:#56617a;
+  --accent:#2a55e0; --accent-ink:#ffffff; --accent-soft:#dfe7ff;
+  --gold:#b47a00; --gold-soft:#fff1cc;
+  --ok:#11794a; --ok-soft:#d9f3e5; --bad:#b9302c; --bad-soft:#fde3e1;
+  --code-bg:#f7f9fd;
+  --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --display:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Code",Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1422; --surface:#161e31; --surface2:#1f2940; --line:#2d3956;
+    --ink:#e8ecf6; --muted:#98a4bf;
+    --accent:#7d9bff; --accent-ink:#0b1020; --accent-soft:#22305a;
+    --gold:#f2c14e; --gold-soft:#3a3115;
+    --ok:#56d39a; --ok-soft:#143526; --bad:#ff8a84; --bad-soft:#3f1b1c;
+    --code-bg:#111828; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1422; --surface:#161e31; --surface2:#1f2940; --line:#2d3956;
+  --ink:#e8ecf6; --muted:#98a4bf;
+  --accent:#7d9bff; --accent-ink:#0b1020; --accent-soft:#22305a;
+  --gold:#f2c14e; --gold-soft:#3a3115;
+  --ok:#56d39a; --ok-soft:#143526; --bad:#ff8a84; --bad-soft:#3f1b1c;
+  --code-bg:#111828; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--font);
+  padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code,kbd{font-family:var(--mono);font-size:.9em;background:var(--surface2);padding:.1em .35em;border-radius:4px}
+h1,h2,h3{font-family:var(--display);line-height:1.15;margin:0;text-wrap:balance;letter-spacing:.01em}
+p{margin:0}
+.wrap{max-width:1240px;margin:0 auto;padding-block:20px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.stack{display:flex;flex-direction:column;gap:16px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.muted{color:var(--muted)}
+.label{font:600 11px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+
+/* barra superior */
+.top{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:16px;padding-block:10px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{font:700 20px/1 var(--display);letter-spacing:.02em;white-space:nowrap}
+.brand b{color:var(--accent);font-family:var(--mono);font-weight:600;font-size:.8em}
+.xpchip{margin-left:auto;display:flex;align-items:center;gap:10px;min-width:0}
+.xpchip .lv{font:600 12px/1 var(--mono);background:var(--accent-soft);color:var(--accent);padding:6px 8px;border-radius:6px;white-space:nowrap}
+.bar{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .4s}
+.xpchip .bar{width:90px}
+nav.tabs{display:flex;gap:2px}
+nav.tabs button{background:none;border:0;padding:8px 12px;border-radius:8px;font-weight:500;color:var(--muted)}
+nav.tabs button[aria-current="page"]{color:var(--ink);background:var(--surface2)}
+@media (max-width:820px){
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);
+    justify-content:space-around;padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  nav.tabs button{flex:1;padding:10px 2px;font-size:12.5px}
+}
+@media (min-width:821px){body{padding-bottom:0}}
+
+/* botões */
+.btn{border:1px solid var(--line);background:var(--surface);padding:9px 14px;border-radius:8px;font-weight:600;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:none}
+.btn.small{padding:6px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* início */
+.hero{display:grid;grid-template-columns:1.3fr 1fr;gap:24px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:24px}
+.hero h1{font-size:clamp(28px,5vw,44px)}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.term{font:13px/1.6 var(--mono);background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:14px;overflow-x:auto;white-space:pre}
+.term .k{color:var(--accent);font-weight:600}.term .c{color:var(--muted)}.term .g{color:var(--ok)}
+@media (max-width:760px){.hero{grid-template-columns:1fr;padding:18px}}
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.mode{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:6px}
+.mode:hover{border-color:var(--accent)}
+.mode h3{font-size:19px}
+.mode .tag{font:600 11px/1 var(--mono);color:var(--accent);letter-spacing:.08em;text-transform:uppercase}
+.mode .foot{margin-top:auto;padding-top:8px;font:500 12px/1.3 var(--mono);color:var(--muted)}
+
+/* campanha */
+.mod{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px}
+.mod.locked{opacity:.62}
+.mod-head{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+.mod-head h2{font-size:20px}
+.mod-head .prog{margin-left:auto;font:500 12px/1 var(--mono);color:var(--muted)}
+.lvls{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.lvl{text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.lvl .n{font:600 11px/1 var(--mono);color:var(--muted)}
+.lvl .t{font-weight:600;font-size:13.5px;line-height:1.25}
+.lvl .s{font-size:12px;color:var(--gold);letter-spacing:2px;min-height:1em}
+.lvl.done{background:var(--ok-soft);border-color:transparent}
+.lvl.next{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.lvl:disabled{opacity:.5;cursor:not-allowed}
+
+/* fase */
+.play-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.play-head h1{font-size:clamp(20px,3.4vw,28px)}
+.timer{margin-left:auto;font:600 18px/1 var(--mono);background:var(--gold-soft);color:var(--gold);padding:8px 12px;border-radius:8px}
+.bench{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px;align-items:start}
+@media (max-width:900px){.bench{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);min-width:0;overflow:hidden}
+.ptabs{display:flex;border-bottom:1px solid var(--line);background:var(--surface2)}
+.ptabs button{flex:1;background:none;border:0;padding:10px 8px;font-weight:600;font-size:13px;color:var(--muted);border-bottom:2px solid transparent}
+.ptabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);background:var(--surface)}
+.pbody{padding:16px;display:flex;flex-direction:column;gap:12px}
+.concept{background:var(--accent-soft);border-radius:8px;padding:12px;font-size:14px}
+.concept pre,.sol pre{margin:8px 0 0;font:12.5px/1.5 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+.task{font-size:15.5px}
+.hint{background:var(--gold-soft);border-radius:8px;padding:10px 12px;font-size:14px}
+.sol{background:var(--code-bg);border:1px dashed var(--line);border-radius:8px;padding:10px 12px}
+.editor{display:flex;flex-direction:column}
+.editor textarea{width:100%;min-height:190px;resize:vertical;border:0;border-bottom:1px solid var(--line);background:var(--code-bg);color:var(--ink);
+  font:16px/1.5 var(--mono);padding:14px;tab-size:2;display:block}
+.editor textarea:focus{outline:none;box-shadow:inset 0 0 0 2px var(--accent)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;border-bottom:1px solid var(--line);scrollbar-width:thin}
+.chip{flex:none;font:500 12px/1 var(--mono);padding:7px 9px;border-radius:6px;border:1px solid var(--line);background:var(--surface)}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.actions{display:flex;gap:8px;padding:10px 12px;flex-wrap:wrap;align-items:center}
+.actions .sp{margin-left:auto}
+.verdict{border-radius:8px;padding:12px 14px;font-weight:600;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.verdict.ok{background:var(--ok-soft);color:var(--ok)}
+.verdict.bad{background:var(--bad-soft);color:var(--bad)}
+.verdict .stars{color:var(--gold);letter-spacing:3px;font-size:18px}
+.verdict .sp{margin-left:auto}
+.err{font:13px/1.5 var(--mono);background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:10px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.tbl{overflow:auto;max-height:340px;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font:12.5px/1.4 var(--mono);font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:0;background:var(--surface2);font-weight:600}
+tr:last-child td{border-bottom:0}
+td.null{color:var(--muted);font-style:italic}
+td.r{text-align:right}
+
+/* esquema */
+details.t{border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+details.t summary{padding:9px 12px;cursor:pointer;font:600 13px/1.2 var(--mono);display:flex;gap:8px;align-items:center}
+details.t summary span{margin-left:auto;font-weight:400;color:var(--muted);font-size:11.5px}
+.cols{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 10px}
+.col{font:500 12px/1 var(--mono);border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 8px}
+.col small{color:var(--muted);font-weight:400}
+.col.pk{border-color:var(--gold)}
+details.t .tbl{margin:0 12px 12px;max-height:220px}
+
+/* perfil */
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:10px}
+.big{font:700 34px/1 var(--display)}
+.prow{display:grid;grid-template-columns:minmax(0,1fr) 90px 44px;gap:10px;align-items:center;font-size:13.5px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);
+  padding:12px 18px;border-radius:10px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,.25);max-width:calc(100vw - 32px);text-align:center}
+.loading{padding:60px 16px;text-align:center;font-family:var(--mono);color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div class="brand">SQL Arena <b>&gt;_</b></div>
+  <nav class="tabs" id="nav" aria-label="Seções"></nav>
+  <div class="xpchip" id="xpchip"></div>
+</div></header>
+<main class="wrap" id="app"><div class="loading">Carregando o banco de dados…</div></main>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+<script>
+"use strict";
+/* ============================== BANCO ============================== */
+const SEED = `
+CREATE TABLE departamentos (id INTEGER PRIMARY KEY, nome TEXT NOT NULL, orcamento REAL, cidade TEXT);
+CREATE TABLE funcionarios (id INTEGER PRIMARY KEY, nome TEXT NOT NULL, cargo TEXT, salario REAL, data_admissao TEXT,
+  departamento_id INTEGER REFERENCES departamentos(id), gerente_id INTEGER REFERENCES funcionarios(id));
+CREATE TABLE clientes (id INTEGER PRIMARY KEY, nome TEXT NOT NULL, email TEXT, cidade TEXT, estado TEXT, data_cadastro TEXT);
+CREATE TABLE categorias (id INTEGER PRIMARY KEY, nome TEXT NOT NULL);
+CREATE TABLE produtos (id INTEGER PRIMARY KEY, nome TEXT NOT NULL, categoria_id INTEGER REFERENCES categorias(id), preco REAL, estoque INTEGER);
+CREATE TABLE pedidos (id INTEGER PRIMARY KEY, cliente_id INTEGER REFERENCES clientes(id), data_pedido TEXT, status TEXT);
+CREATE TABLE itens_pedido (id INTEGER PRIMARY KEY, pedido_id INTEGER REFERENCES pedidos(id), produto_id INTEGER REFERENCES produtos(id), quantidade INTEGER, preco_unitario REAL);
+INSERT INTO departamentos VALUES (1,'Engenharia',900000,'São Paulo'),(2,'Dados',600000,'São Paulo'),(3,'Produto',400000,'Florianópolis'),(4,'Vendas',350000,'Recife'),(5,'Pesquisa',250000,'Campinas');
+INSERT INTO funcionarios VALUES
+(1,'Ana Ribeiro','CTO',32000,'2015-03-10',1,NULL),(2,'Bruno Costa','Engenheiro Sênior',18500,'2017-06-01',1,1),
+(3,'Carla Mendes','Engenheira Plena',12000,'2019-09-15',1,2),(4,'Diego Alves','Engenheiro Júnior',6500,'2022-02-01',1,2),
+(5,'Elisa Prado','Head de Dados',24000,'2016-11-20',2,1),(6,'Fábio Nunes','DBA',15000,'2018-04-12',2,5),
+(7,'Gabriela Lima','Cientista de Dados',13500,'2020-08-03',2,5),(8,'Heitor Souza','Analista de Dados',7800,'2021-05-17',2,6),
+(9,'Isabela Rocha','Gerente de Produto',16000,'2018-01-22',3,1),(10,'João Pedro Dias','Designer',9000,'2021-10-04',3,9),
+(11,'Karen Oliveira','Gerente de Vendas',14000,'2017-07-30',4,1),(12,'Lucas Martins','Vendedor',5200,'2022-06-13',4,11),
+(13,'Marina Teixeira','Vendedora',5600,'2020-03-09',4,11),(14,'Nelson Barros','Engenheiro Pleno',12000,'2019-11-05',1,2),
+(15,'Olívia Santos','Estagiária',2200,'2023-08-01',NULL,3);
+INSERT INTO clientes VALUES
+(1,'Rafael Torres','rafael@email.com','São Paulo','SP','2023-01-15'),(2,'Sofia Carvalho','sofia@email.com','Rio de Janeiro','RJ','2023-02-20'),
+(3,'Thiago Moreira',NULL,'Belo Horizonte','MG','2023-03-05'),(4,'Vanessa Farias','vanessa@empresa.com.br','Curitiba','PR','2023-04-11'),
+(5,'William Gomes','will@email.com','São Paulo','SP','2023-05-30'),(6,'Yara Batista',NULL,'Recife','PE','2023-07-08'),
+(7,'Caio Fernandes','caio@empresa.com.br','Campinas','SP','2023-09-19'),(8,'Lívia Araújo','livia@email.com','Porto Alegre','RS','2023-11-02'),
+(9,'Pedro Henrique Sá','pedro@email.com','Rio de Janeiro','RJ','2024-01-12'),(10,'Renata Vieira','renata@empresa.com.br','Salvador','BA','2024-02-25');
+INSERT INTO categorias VALUES (1,'Periféricos'),(2,'Componentes'),(3,'Monitores'),(4,'Redes'),(5,'Software');
+INSERT INTO produtos VALUES
+(1,'Teclado Mecânico',1,349.90,40),(2,'Mouse Gamer',1,199.90,75),(3,'Headset USB',1,279.00,0),(4,'SSD NVMe 1TB',2,529.00,30),
+(5,'Memória RAM 16GB',2,319.90,55),(6,'Placa de Vídeo RTX',2,3899.00,8),(7,'Processador 8 núcleos',2,1799.00,12),
+(8,'Monitor 27 4K',3,2199.00,10),(9,'Monitor 24 Full HD',3,899.00,25),(10,'Roteador Wi-Fi 6',4,459.90,18),
+(11,'Switch 8 portas',4,189.90,0),(12,'Webcam Full HD',1,249.90,33);
+INSERT INTO pedidos VALUES
+(1,1,'2024-01-10','entregue'),(2,2,'2024-01-15','entregue'),(3,1,'2024-02-03','entregue'),(4,3,'2024-02-14','cancelado'),
+(5,4,'2024-02-28','entregue'),(6,5,'2024-03-05','entregue'),(7,2,'2024-03-12','enviado'),(8,6,'2024-03-20','entregue'),
+(9,7,'2024-04-02','entregue'),(10,1,'2024-04-18','enviado'),(11,8,'2024-04-25','pendente'),(12,9,'2024-05-06','entregue'),
+(13,5,'2024-05-19','cancelado'),(14,4,'2024-05-27','pendente');
+INSERT INTO itens_pedido VALUES
+(1,1,1,1,349.90),(2,1,2,1,199.90),(3,2,8,1,2199.00),(4,3,4,2,529.00),(5,3,5,2,319.90),(6,4,6,1,3899.00),(7,5,9,2,899.00),
+(8,5,10,1,459.90),(9,6,7,1,1799.00),(10,6,5,2,299.90),(11,7,2,3,199.90),(12,8,3,1,279.00),(13,9,6,1,3799.00),(14,9,4,1,529.00),
+(15,10,11,2,189.90),(16,10,1,1,329.90),(17,11,9,1,899.00),(18,12,8,2,2099.00),(19,12,2,2,199.90),(20,13,10,1,459.90),(21,14,5,4,319.90);
+`;
+
+/* ============================== FASES ==============================
+   t título · c conceito · p enunciado · s solução · o ordem importa · h dica
+   chk consulta de verificação (DDL/DML) · fail comando que deve falhar · must regex obrigatórias */
+const MODULES = [
+{name:"Fundamentos", tag:"SELECT · WHERE · ORDER BY", xp:10, levels:[
+ {t:"Olá, SELECT", c:`<code>SELECT</code> escolhe colunas e <code>FROM</code> diz de qual tabela. O asterisco traz todas as colunas.<pre>SELECT * FROM clientes;</pre>`,
+  p:`Liste <b>todas as colunas</b> de todos os produtos.`, s:`SELECT * FROM produtos`, h:`Troque a tabela do exemplo por <code>produtos</code>.`},
+ {t:"Projeção", c:`Projeção é escolher só as colunas que interessam, separadas por vírgula. Em álgebra relacional é o operador π.<pre>SELECT nome, cidade FROM clientes;</pre>`,
+  p:`Mostre apenas <code>nome</code> e <code>preco</code> de cada produto.`, s:`SELECT nome, preco FROM produtos`, h:`<code>SELECT nome, preco FROM …</code>`},
+ {t:"Filtrando linhas", c:`<code>WHERE</code> mantém só as linhas em que a condição é verdadeira (seleção, σ). Operadores: <code>= &lt;&gt; &lt; &gt; &lt;= &gt;=</code>.<pre>SELECT nome FROM funcionarios WHERE salario &gt; 15000;</pre>`,
+  p:`Liste <code>nome</code> e <code>preco</code> dos produtos que custam mais de 1000.`, s:`SELECT nome, preco FROM produtos WHERE preco > 1000`, h:`Use <code>WHERE preco &gt; 1000</code>.`},
+ {t:"AND e OR", c:`Combine condições com <code>AND</code> (todas) e <code>OR</code> (qualquer uma). <code>AND</code> tem precedência sobre <code>OR</code>; use parênteses quando misturar.`,
+  p:`Liste <code>nome</code>, <code>cargo</code> e <code>salario</code> dos funcionários do departamento 1 que ganham 12000 ou mais.`, s:`SELECT nome, cargo, salario FROM funcionarios WHERE departamento_id = 1 AND salario >= 12000`, h:`Duas condições ligadas por <code>AND</code>.`},
+ {t:"Ordenação", c:`<code>ORDER BY</code> ordena o resultado. <code>ASC</code> é o padrão; <code>DESC</code> inverte. Várias chaves desempatam em sequência.<pre>SELECT nome FROM clientes ORDER BY estado, nome DESC;</pre>`,
+  p:`Liste <code>nome</code> e <code>salario</code> dos funcionários, do maior para o menor salário. Em caso de empate, ordene por nome (A→Z).`, s:`SELECT nome, salario FROM funcionarios ORDER BY salario DESC, nome`, o:1, h:`<code>ORDER BY salario DESC, nome</code>`},
+ {t:"Top N com LIMIT", c:`<code>LIMIT n</code> corta o resultado nas primeiras <i>n</i> linhas. Sem <code>ORDER BY</code> a escolha é arbitrária, então os dois andam juntos.`,
+  p:`Mostre <code>nome</code> e <code>preco</code> dos 3 produtos mais caros, do mais caro para o mais barato.`, s:`SELECT nome, preco FROM produtos ORDER BY preco DESC LIMIT 3`, o:1, h:`Ordene por preço decrescente e limite a 3.`},
+ {t:"Valores distintos", c:`<code>DISTINCT</code> elimina linhas duplicadas do resultado.<pre>SELECT DISTINCT status FROM pedidos;</pre>`,
+  p:`Liste os <code>estado</code>s distintos onde há clientes.`, s:`SELECT DISTINCT estado FROM clientes`, h:`<code>SELECT DISTINCT estado …</code>`}
+]},
+{name:"Filtros avançados", tag:"IN · BETWEEN · LIKE · NULL", xp:15, levels:[
+ {t:"Lista com IN", c:`<code>IN (…)</code> testa se o valor pertence a uma lista. Equivale a vários <code>OR</code>.<pre>WHERE estado IN ('SP','RJ')</pre>`,
+  p:`Liste <code>id</code>, <code>data_pedido</code> e <code>status</code> dos pedidos com status <code>'pendente'</code> ou <code>'enviado'</code>.`, s:`SELECT id, data_pedido, status FROM pedidos WHERE status IN ('pendente','enviado')`, h:`<code>WHERE status IN ('pendente','enviado')</code>`},
+ {t:"Faixas com BETWEEN", c:`<code>BETWEEN a AND b</code> inclui os dois extremos: é o mesmo que <code>x &gt;= a AND x &lt;= b</code>.`,
+  p:`Liste <code>nome</code> e <code>preco</code> dos produtos com preço entre 200 e 500 (inclusive).`, s:`SELECT nome, preco FROM produtos WHERE preco BETWEEN 200 AND 500`, h:`<code>WHERE preco BETWEEN 200 AND 500</code>`},
+ {t:"Padrões com LIKE", c:`<code>LIKE</code> compara texto com curingas: <code>%</code> casa qualquer sequência e <code>_</code> um único caractere.<pre>WHERE nome LIKE 'Mon%'</pre>`,
+  p:`Liste <code>nome</code> e <code>email</code> dos clientes cujo e-mail termina em <code>@empresa.com.br</code>.`, s:`SELECT nome, email FROM clientes WHERE email LIKE '%@empresa.com.br'`, h:`O <code>%</code> vai no começo do padrão.`},
+ {t:"A lógica do NULL", c:`<code>NULL</code> significa "desconhecido". Qualquer comparação com ele resulta em desconhecido (lógica de três valores), por isso <code>= NULL</code> nunca é verdadeiro. Use <code>IS NULL</code> / <code>IS NOT NULL</code>.`,
+  p:`Liste <code>nome</code> e <code>cidade</code> dos clientes que não têm e-mail cadastrado.`, s:`SELECT nome, cidade FROM clientes WHERE email IS NULL`, h:`<code>WHERE email IS NULL</code>`},
+ {t:"Colunas calculadas", c:`Você pode calcular expressões no <code>SELECT</code> e nomeá-las com <code>AS</code>.<pre>SELECT nome, salario * 12 AS anual FROM funcionarios;</pre>`,
+  p:`Para os produtos com estoque maior que zero, mostre <code>nome</code> e o valor total em estoque (<code>preco * estoque</code>) como <code>valor_estoque</code>, do maior para o menor.`, s:`SELECT nome, preco * estoque AS valor_estoque FROM produtos WHERE estoque > 0 ORDER BY valor_estoque DESC`, o:1, h:`Filtre com <code>estoque &gt; 0</code> e ordene pelo alias.`},
+ {t:"Negação", c:`<code>NOT</code> inverte uma condição: <code>NOT LIKE</code>, <code>NOT IN</code>, <code>NOT BETWEEN</code>.`,
+  p:`Liste <code>nome</code> e <code>cargo</code> dos funcionários cujo cargo <b>não</b> contém <code>Engenheir</code> e que ganham menos de 10000.`, s:`SELECT nome, cargo FROM funcionarios WHERE cargo NOT LIKE '%Engenheir%' AND salario < 10000`, h:`<code>cargo NOT LIKE '%Engenheir%'</code>`}
+]},
+{name:"Agregações", tag:"COUNT · SUM · GROUP BY · HAVING", xp:20, levels:[
+ {t:"Contando linhas", c:`Funções de agregação resumem várias linhas em um valor. <code>COUNT(*)</code> conta linhas.`,
+  p:`Quantos clientes existem? Retorne um único número.`, s:`SELECT COUNT(*) FROM clientes`, h:`<code>SELECT COUNT(*) FROM clientes</code>`},
+ {t:"MIN, MAX e AVG", c:`<code>MIN</code>, <code>MAX</code>, <code>SUM</code> e <code>AVG</code> ignoram <code>NULL</code>. <code>ROUND(x, 2)</code> arredonda para 2 casas.`,
+  p:`Em uma linha, mostre o menor preço, o maior preço e o preço médio (2 casas) dos produtos, nessa ordem.`, s:`SELECT MIN(preco), MAX(preco), ROUND(AVG(preco),2) FROM produtos`, h:`Três agregações no mesmo <code>SELECT</code>.`},
+ {t:"Agrupando", c:`<code>GROUP BY</code> forma grupos de linhas com o mesmo valor e aplica a agregação em cada grupo.<pre>SELECT estado, COUNT(*) FROM clientes GROUP BY estado;</pre>`,
+  p:`Mostre <code>departamento_id</code> e a quantidade de funcionários de cada um.`, s:`SELECT departamento_id, COUNT(*) FROM funcionarios GROUP BY departamento_id`, h:`Agrupe por <code>departamento_id</code>. O grupo NULL também aparece.`},
+ {t:"Agrupar e ordenar", c:`A ordem lógica de avaliação é <code>FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT</code>. Por isso dá para ordenar por uma agregação.`,
+  p:`Mostre cada <code>status</code> de pedido e quantos pedidos há nele, do mais frequente para o menos. Empates em ordem alfabética de status.`, s:`SELECT status, COUNT(*) AS total FROM pedidos GROUP BY status ORDER BY total DESC, status`, o:1, h:`<code>ORDER BY total DESC, status</code>`},
+ {t:"Filtrando grupos", c:`<code>WHERE</code> filtra linhas antes de agrupar; <code>HAVING</code> filtra os grupos depois da agregação.<pre>… GROUP BY estado HAVING COUNT(*) &gt;= 2</pre>`,
+  p:`Mostre <code>categoria_id</code> e o total de produtos, apenas das categorias com mais de 2 produtos.`, s:`SELECT categoria_id, COUNT(*) FROM produtos GROUP BY categoria_id HAVING COUNT(*) > 2`, h:`A condição sobre <code>COUNT(*)</code> vai no <code>HAVING</code>.`},
+ {t:"COUNT e NULL", c:`<code>COUNT(*)</code> conta linhas; <code>COUNT(coluna)</code> conta só valores não nulos; <code>COUNT(DISTINCT coluna)</code> conta valores diferentes.`,
+  p:`Em uma linha: o total de clientes e quantos deles têm e-mail.`, s:`SELECT COUNT(*), COUNT(email) FROM clientes`, h:`<code>COUNT(email)</code> ignora os NULL.`},
+ {t:"Total por pedido", c:`Agregações aceitam expressões: <code>SUM(quantidade * preco_unitario)</code> soma o valor de cada linha do grupo.`,
+  p:`Usando <code>itens_pedido</code>, mostre <code>pedido_id</code> e o valor total de cada pedido, apenas os que passam de 2000, do maior para o menor.`, s:`SELECT pedido_id, SUM(quantidade * preco_unitario) AS total FROM itens_pedido GROUP BY pedido_id HAVING SUM(quantidade * preco_unitario) > 2000 ORDER BY total DESC`, o:1, h:`<code>GROUP BY pedido_id HAVING SUM(…) &gt; 2000</code>`}
+]},
+{name:"Junções", tag:"INNER · LEFT · SELF JOIN", xp:25, levels:[
+ {t:"INNER JOIN", c:`Uma junção combina linhas de duas tabelas que satisfazem a condição do <code>ON</code>, normalmente chave estrangeira = chave primária.<pre>SELECT f.nome, d.nome
+FROM funcionarios f
+JOIN departamentos d ON d.id = f.departamento_id;</pre>`,
+  p:`Mostre o nome de cada produto e o nome da sua categoria.`, s:`SELECT p.nome, c.nome FROM produtos p JOIN categorias c ON c.id = p.categoria_id`, h:`<code>produtos.categoria_id = categorias.id</code>`},
+ {t:"JOIN com filtro", c:`Depois de juntar, você filtra normalmente com <code>WHERE</code>, usando colunas de qualquer uma das tabelas. Apelidos (<code>f</code>, <code>d</code>) evitam ambiguidade.`,
+  p:`Mostre o nome do funcionário e o nome do departamento, apenas para departamentos localizados em <code>'São Paulo'</code>.`, s:`SELECT f.nome, d.nome FROM funcionarios f JOIN departamentos d ON d.id = f.departamento_id WHERE d.cidade = 'São Paulo'`, h:`Junte e depois <code>WHERE d.cidade = 'São Paulo'</code>.`},
+ {t:"LEFT JOIN", c:`<code>LEFT JOIN</code> mantém todas as linhas da tabela da esquerda; onde não há par, as colunas da direita vêm <code>NULL</code>. Combine com <code>COUNT(coluna_da_direita)</code> para contar zero.`,
+  p:`Mostre o nome de <b>todos</b> os departamentos e quantos funcionários cada um tem (inclusive os com zero).`, s:`SELECT d.nome, COUNT(f.id) FROM departamentos d LEFT JOIN funcionarios f ON f.departamento_id = d.id GROUP BY d.id, d.nome`, h:`<code>COUNT(f.id)</code> em vez de <code>COUNT(*)</code>.`},
+ {t:"Anti-junção", c:`Para achar linhas <b>sem</b> correspondência: <code>LEFT JOIN</code> e depois filtre onde a chave da direita <code>IS NULL</code>.`,
+  p:`Liste o <code>nome</code> dos clientes que nunca fizeram um pedido.`, s:`SELECT c.nome FROM clientes c LEFT JOIN pedidos p ON p.cliente_id = c.id WHERE p.id IS NULL`, h:`<code>LEFT JOIN pedidos … WHERE p.id IS NULL</code>`},
+ {t:"Três tabelas", c:`Junções se encadeiam: cada <code>JOIN</code> acrescenta uma tabela ao resultado parcial.`,
+  p:`Para cada pedido com status <code>'entregue'</code>, mostre o id do pedido, o nome do cliente e o valor total do pedido, do maior total para o menor.`, s:`SELECT p.id, c.nome, SUM(i.quantidade * i.preco_unitario) AS total FROM pedidos p JOIN clientes c ON c.id = p.cliente_id JOIN itens_pedido i ON i.pedido_id = p.id WHERE p.status = 'entregue' GROUP BY p.id, c.nome ORDER BY total DESC`, o:1, h:`pedidos → clientes e pedidos → itens_pedido; agrupe por pedido.`},
+ {t:"Auto-junção", c:`Uma tabela pode se juntar com ela mesma usando dois apelidos. É assim que se navega uma hierarquia como <code>gerente_id</code>.`,
+  p:`Mostre o nome de cada funcionário e o nome do seu gerente. Quem não tem gerente deve aparecer com <code>NULL</code>.`, s:`SELECT f.nome, g.nome FROM funcionarios f LEFT JOIN funcionarios g ON g.id = f.gerente_id`, h:`<code>funcionarios f LEFT JOIN funcionarios g ON g.id = f.gerente_id</code>`},
+ {t:"Receita por categoria", c:`Junte, filtre, agrupe e ordene: a consulta analítica típica do dia a dia.`,
+  p:`Mostre o nome da categoria e a receita total (<code>quantidade * preco_unitario</code>) de pedidos <b>não cancelados</b>, da maior para a menor receita.`, s:`SELECT c.nome, SUM(i.quantidade * i.preco_unitario) AS receita FROM itens_pedido i JOIN pedidos p ON p.id = i.pedido_id JOIN produtos pr ON pr.id = i.produto_id JOIN categorias c ON c.id = pr.categoria_id WHERE p.status <> 'cancelado' GROUP BY c.id, c.nome ORDER BY receita DESC`, o:1, h:`itens_pedido → pedidos (status), → produtos → categorias.`}
+]},
+{name:"Subconsultas", tag:"IN · EXISTS · correlacionadas", xp:30, levels:[
+ {t:"Subconsulta escalar", c:`Uma subconsulta que retorna um único valor pode ser usada como se fosse uma constante.<pre>WHERE salario &gt; (SELECT AVG(salario) FROM funcionarios)</pre>`,
+  p:`Liste <code>nome</code> e <code>preco</code> dos produtos mais caros que a média de preço.`, s:`SELECT nome, preco FROM produtos WHERE preco > (SELECT AVG(preco) FROM produtos)`, h:`Compare <code>preco</code> com <code>(SELECT AVG(preco) FROM produtos)</code>.`},
+ {t:"IN com subconsulta", c:`<code>IN (SELECT …)</code> testa pertencimento ao conjunto retornado por outra consulta (semi-junção).`,
+  p:`Liste o <code>nome</code> dos clientes que têm pelo menos um pedido cancelado.`, s:`SELECT nome FROM clientes WHERE id IN (SELECT cliente_id FROM pedidos WHERE status = 'cancelado')`, h:`<code>WHERE id IN (SELECT cliente_id FROM pedidos WHERE …)</code>`},
+ {t:"NOT EXISTS", c:`<code>EXISTS</code> é verdadeiro se a subconsulta retorna alguma linha. <code>NOT EXISTS</code> é a forma segura de anti-junção, pois não sofre com <code>NULL</code> como o <code>NOT IN</code>.`,
+  p:`Liste o <code>nome</code> dos produtos que nunca apareceram em nenhum item de pedido.`, s:`SELECT nome FROM produtos p WHERE NOT EXISTS (SELECT 1 FROM itens_pedido i WHERE i.produto_id = p.id)`, h:`<code>WHERE NOT EXISTS (SELECT 1 FROM itens_pedido i WHERE i.produto_id = p.id)</code>`},
+ {t:"Correlacionada", c:`Uma subconsulta correlacionada referencia a linha da consulta externa e é reavaliada para cada linha.`,
+  p:`Liste <code>nome</code>, <code>salario</code> e <code>departamento_id</code> dos funcionários que ganham mais que a média do próprio departamento.`, s:`SELECT nome, salario, departamento_id FROM funcionarios f WHERE salario > (SELECT AVG(salario) FROM funcionarios x WHERE x.departamento_id = f.departamento_id)`, h:`Na subconsulta: <code>WHERE x.departamento_id = f.departamento_id</code>.`},
+ {t:"Tabela derivada", c:`Uma subconsulta no <code>FROM</code> vira uma tabela temporária. Útil para agregar em duas etapas.<pre>SELECT MAX(n) FROM (SELECT COUNT(*) AS n FROM … GROUP BY …);</pre>`,
+  p:`Qual é a média de pedidos por cliente, considerando apenas clientes que já pediram? Um único número com 2 casas.`, s:`SELECT ROUND(AVG(n),2) FROM (SELECT COUNT(*) AS n FROM pedidos GROUP BY cliente_id)`, h:`Primeiro conte pedidos por cliente; depois tire a média dessa contagem.`},
+ {t:"Subconsulta no SELECT", c:`Uma subconsulta escalar correlacionada também pode ser uma coluna do resultado.`,
+  p:`Mostre o <code>nome</code> de cada cliente e quantos pedidos ele fez (inclusive zero), do maior para o menor; empates por nome.`, s:`SELECT c.nome, (SELECT COUNT(*) FROM pedidos p WHERE p.cliente_id = c.id) AS pedidos FROM clientes c ORDER BY pedidos DESC, c.nome`, o:1, h:`<code>(SELECT COUNT(*) FROM pedidos p WHERE p.cliente_id = c.id)</code> como coluna.`}
+]},
+{name:"Funções e CASE", tag:"texto · datas · CASE · COALESCE", xp:25, levels:[
+ {t:"Concatenação", c:`No padrão SQL (e no SQLite) textos se concatenam com <code>||</code>.<pre>SELECT nome || ' - ' || cargo FROM funcionarios;</pre>`,
+  p:`Mostre uma única coluna com o nome do cliente seguido do estado entre parênteses, como <code>Rafael Torres (SP)</code>.`, s:`SELECT nome || ' (' || estado || ')' FROM clientes`, h:`<code>nome || ' (' || estado || ')'</code>`},
+ {t:"COALESCE", c:`<code>COALESCE(a, b, …)</code> devolve o primeiro argumento não nulo. Serve para dar valor padrão a <code>NULL</code>.`,
+  p:`Mostre <code>nome</code> e e-mail dos clientes, exibindo <code>'sem email'</code> quando o e-mail for nulo.`, s:`SELECT nome, COALESCE(email, 'sem email') FROM clientes`, h:`<code>COALESCE(email, 'sem email')</code>`},
+ {t:"CASE", c:`<code>CASE</code> é o if/else do SQL; as condições são testadas em ordem.<pre>CASE WHEN x &gt;= 10 THEN 'alto'
+     WHEN x &gt;= 5 THEN 'médio'
+     ELSE 'baixo' END</pre>`,
+  p:`Mostre <code>nome</code>, <code>preco</code> e uma faixa: <code>'premium'</code> se preço ≥ 1500, <code>'intermediário'</code> se ≥ 300, senão <code>'básico'</code>.`, s:`SELECT nome, preco, CASE WHEN preco >= 1500 THEN 'premium' WHEN preco >= 300 THEN 'intermediário' ELSE 'básico' END FROM produtos`, h:`Teste primeiro a faixa mais alta.`},
+ {t:"Datas", c:`Funções de data variam entre SGBDs. Aqui o motor é SQLite: <code>strftime('%Y-%m', data)</code> extrai ano-mês (em PostgreSQL seria <code>to_char</code>, em MySQL <code>DATE_FORMAT</code>).`,
+  p:`Mostre o mês (formato <code>AAAA-MM</code>) e o número de pedidos feitos em cada mês, em ordem cronológica.`, s:`SELECT strftime('%Y-%m', data_pedido) AS mes, COUNT(*) FROM pedidos GROUP BY mes ORDER BY mes`, o:1, h:`<code>strftime('%Y-%m', data_pedido)</code> e agrupe por ele.`},
+ {t:"Agregação condicional", c:`<code>SUM(CASE WHEN cond THEN 1 ELSE 0 END)</code> conta só as linhas que satisfazem a condição. É a base de tabelas pivô.`,
+  p:`Em uma única linha, mostre quantos pedidos estão <code>'entregue'</code> e quantos estão <code>'cancelado'</code>, nessa ordem.`, s:`SELECT SUM(CASE WHEN status = 'entregue' THEN 1 ELSE 0 END), SUM(CASE WHEN status = 'cancelado' THEN 1 ELSE 0 END) FROM pedidos`, h:`Dois <code>SUM(CASE …)</code> no mesmo SELECT.`},
+ {t:"Aritmética", c:`Cuidado com divisão inteira: <code>7 / 2</code> dá <code>3</code>. Multiplique por <code>1.0</code> ou use um literal decimal para forçar ponto flutuante.`,
+  p:`Para os funcionários do departamento 4, mostre <code>nome</code>, <code>salario</code> e o salário com 10% de aumento, arredondado em 2 casas.`, s:`SELECT nome, salario, ROUND(salario * 1.10, 2) FROM funcionarios WHERE departamento_id = 4`, h:`<code>ROUND(salario * 1.10, 2)</code>`}
+]},
+{name:"Conjuntos e CTEs", tag:"UNION · INTERSECT · WITH · recursão", xp:35, levels:[
+ {t:"UNION", c:`<code>UNION</code> junta os resultados de duas consultas e remove duplicatas (<code>UNION ALL</code> mantém). As consultas precisam ter o mesmo número de colunas.`,
+  p:`Liste, sem repetição, todas as cidades onde há clientes ou departamentos.`, s:`SELECT cidade FROM clientes UNION SELECT cidade FROM departamentos`, h:`Duas consultas de <code>cidade</code> ligadas por <code>UNION</code>.`},
+ {t:"INTERSECT", c:`<code>INTERSECT</code> devolve apenas as linhas presentes nos dois resultados.`,
+  p:`Liste as cidades que têm tanto clientes quanto departamentos.`, s:`SELECT cidade FROM clientes INTERSECT SELECT cidade FROM departamentos`, h:`Troque <code>UNION</code> por <code>INTERSECT</code>.`},
+ {t:"EXCEPT", c:`<code>EXCEPT</code> (diferença de conjuntos) devolve as linhas da primeira consulta que não estão na segunda.`,
+  p:`Liste as cidades com clientes mas sem nenhum departamento.`, s:`SELECT cidade FROM clientes EXCEPT SELECT cidade FROM departamentos`, h:`A ordem das consultas importa no <code>EXCEPT</code>.`},
+ {t:"WITH (CTE)", c:`Uma CTE dá nome a uma subconsulta e deixa a consulta legível, de cima para baixo.<pre>WITH totais AS (
+  SELECT pedido_id, SUM(quantidade * preco_unitario) AS total
+  FROM itens_pedido GROUP BY pedido_id
+)
+SELECT * FROM totais;</pre>`,
+  p:`Mostre <code>pedido_id</code> e total dos pedidos cujo total é maior que a média dos totais de todos os pedidos.`, s:`WITH totais AS (SELECT pedido_id, SUM(quantidade * preco_unitario) AS total FROM itens_pedido GROUP BY pedido_id) SELECT pedido_id, total FROM totais WHERE total > (SELECT AVG(total) FROM totais)`, h:`A CTE pode ser usada duas vezes: no FROM e na subconsulta da média.`},
+ {t:"CTEs encadeadas", c:`Várias CTEs se separam por vírgula, e cada uma pode usar as anteriores.`,
+  p:`Qual cliente mais gastou em pedidos <b>não cancelados</b>? Mostre <code>nome</code> e total gasto (uma linha).`, s:`WITH gasto AS (SELECT p.cliente_id, SUM(i.quantidade * i.preco_unitario) AS total FROM pedidos p JOIN itens_pedido i ON i.pedido_id = p.id WHERE p.status <> 'cancelado' GROUP BY p.cliente_id) SELECT c.nome, g.total FROM gasto g JOIN clientes c ON c.id = g.cliente_id ORDER BY g.total DESC LIMIT 1`, h:`Some por cliente em uma CTE; depois ordene e pegue o primeiro.`},
+ {t:"CTE recursiva", c:`<code>WITH RECURSIVE</code> tem um caso base e um passo recursivo unidos por <code>UNION ALL</code>. Serve para hierarquias e grafos. Garanta que a recursão termina.<pre>WITH RECURSIVE sub(id) AS (
+  SELECT id FROM funcionarios WHERE gerente_id = 1
+  UNION ALL
+  SELECT f.id FROM funcionarios f JOIN sub s ON f.gerente_id = s.id
+)
+SELECT * FROM sub;</pre>`,
+  p:`Liste o <code>nome</code> de todos os subordinados, diretos e indiretos, de Elisa Prado (id 5).`, s:`WITH RECURSIVE sub(id, nome) AS (SELECT id, nome FROM funcionarios WHERE gerente_id = 5 UNION ALL SELECT f.id, f.nome FROM funcionarios f JOIN sub s ON f.gerente_id = s.id) SELECT nome FROM sub`, h:`Caso base: <code>gerente_id = 5</code>. Passo: funcionários cujo gerente já está em <code>sub</code>.`}
+]},
+{name:"Funções de janela", tag:"OVER · PARTITION BY · RANK · LAG", xp:40, levels:[
+ {t:"ROW_NUMBER", c:`Funções de janela calculam sobre um conjunto de linhas sem colapsá-las, ao contrário do <code>GROUP BY</code>.<pre>ROW_NUMBER() OVER (ORDER BY salario DESC)</pre>`,
+  p:`Mostre <code>nome</code>, <code>salario</code> e a posição de cada funcionário no ranking salarial (1 = maior salário; empates por nome A→Z).`, s:`SELECT nome, salario, ROW_NUMBER() OVER (ORDER BY salario DESC, nome) FROM funcionarios`, h:`<code>ROW_NUMBER() OVER (ORDER BY salario DESC, nome)</code>`},
+ {t:"RANK por partição", c:`<code>PARTITION BY</code> reinicia o cálculo a cada grupo. <code>RANK()</code> repete a posição em empates e pula a seguinte; <code>DENSE_RANK()</code> não pula.`,
+  p:`Mostre <code>nome</code>, <code>departamento_id</code>, <code>salario</code> e o <code>RANK</code> do salário dentro do departamento (maior salário = 1).`, s:`SELECT nome, departamento_id, salario, RANK() OVER (PARTITION BY departamento_id ORDER BY salario DESC) FROM funcionarios`, h:`<code>RANK() OVER (PARTITION BY departamento_id ORDER BY salario DESC)</code>`},
+ {t:"Soma acumulada", c:`Uma agregação com <code>OVER (ORDER BY …)</code> vira acumulada: soma da primeira linha até a atual.`,
+  p:`Para cada pedido mostre <code>id</code>, <code>data_pedido</code>, o total do pedido e o total acumulado até aquela data (2 casas), em ordem cronológica.`, s:`WITH t AS (SELECT p.id, p.data_pedido, SUM(i.quantidade * i.preco_unitario) AS total FROM pedidos p JOIN itens_pedido i ON i.pedido_id = p.id GROUP BY p.id, p.data_pedido) SELECT id, data_pedido, ROUND(total,2), ROUND(SUM(total) OVER (ORDER BY data_pedido),2) FROM t ORDER BY data_pedido`, o:1, h:`Calcule o total por pedido numa CTE; depois <code>SUM(total) OVER (ORDER BY data_pedido)</code>.`},
+ {t:"LAG", c:`<code>LAG(col)</code> lê o valor da linha anterior na ordem da janela; <code>LEAD</code> lê o da próxima. A primeira linha recebe <code>NULL</code>.`,
+  p:`Mostre <code>id</code>, <code>data_pedido</code> e a data do pedido imediatamente anterior (por data), em ordem cronológica.`, s:`SELECT id, data_pedido, LAG(data_pedido) OVER (ORDER BY data_pedido) FROM pedidos ORDER BY data_pedido`, o:1, h:`<code>LAG(data_pedido) OVER (ORDER BY data_pedido)</code>`},
+ {t:"Top 1 por grupo", c:`Padrão clássico: numere as linhas dentro de cada grupo numa CTE e filtre <code>WHERE rn = 1</code> fora dela (janelas não podem ir direto no <code>WHERE</code>).`,
+  p:`Mostre, para cada categoria com produtos, o nome da categoria, o nome do produto mais caro e seu preço.`, s:`WITH r AS (SELECT c.nome AS categoria, p.nome AS produto, p.preco, ROW_NUMBER() OVER (PARTITION BY p.categoria_id ORDER BY p.preco DESC) AS rn FROM produtos p JOIN categorias c ON c.id = p.categoria_id) SELECT categoria, produto, preco FROM r WHERE rn = 1`, h:`<code>ROW_NUMBER() OVER (PARTITION BY categoria_id ORDER BY preco DESC)</code> e filtre <code>rn = 1</code>.`},
+ {t:"Percentual do grupo", c:`Sem <code>ORDER BY</code>, a janela cobre a partição inteira: <code>SUM(x) OVER (PARTITION BY g)</code> é o total do grupo em cada linha.`,
+  p:`Mostre <code>nome</code>, <code>salario</code> e o percentual que o salário representa na folha do seu departamento, arredondado em 1 casa.`, s:`SELECT nome, salario, ROUND(100.0 * salario / SUM(salario) OVER (PARTITION BY departamento_id), 1) FROM funcionarios`, h:`<code>100.0 * salario / SUM(salario) OVER (PARTITION BY departamento_id)</code>`}
+]},
+{name:"DDL e DML", tag:"CREATE · INSERT · UPDATE · transações", xp:30, levels:[
+ {t:"INSERT", c:`<code>INSERT INTO tabela (colunas) VALUES (…)</code> acrescenta linhas. Nestas fases o banco é recriado a cada execução, e o estado final é conferido.`,
+  p:`Insira a categoria de id <code>6</code> e nome <code>'Armazenamento'</code>.`, s:`INSERT INTO categorias (id, nome) VALUES (6, 'Armazenamento')`, chk:`SELECT id, nome FROM categorias ORDER BY id`, h:`<code>INSERT INTO categorias (id, nome) VALUES (…)</code>`},
+ {t:"UPDATE", c:`<code>UPDATE tabela SET col = expr WHERE …</code>. Sem <code>WHERE</code>, todas as linhas são alteradas.`,
+  p:`Aumente em 10% o preço de todos os produtos da categoria 4.`, s:`UPDATE produtos SET preco = preco * 1.10 WHERE categoria_id = 4`, chk:`SELECT id, nome, ROUND(preco,2) AS preco FROM produtos ORDER BY id`, h:`<code>SET preco = preco * 1.10 WHERE categoria_id = 4</code>`},
+ {t:"DELETE", c:`<code>DELETE FROM tabela WHERE …</code>. Com integridade referencial, apague primeiro as linhas filhas (ou use <code>ON DELETE CASCADE</code> na definição).`,
+  p:`Apague os pedidos cancelados <b>e</b> os itens que pertencem a eles.`, s:`DELETE FROM itens_pedido WHERE pedido_id IN (SELECT id FROM pedidos WHERE status = 'cancelado'); DELETE FROM pedidos WHERE status = 'cancelado'`, chk:`SELECT 'pedido' AS tipo, id FROM pedidos UNION ALL SELECT 'item', id FROM itens_pedido ORDER BY 1, 2`, h:`Dois comandos separados por <code>;</code>: primeiro os itens, depois os pedidos.`},
+ {t:"CREATE TABLE", c:`A definição da tabela carrega as restrições de integridade: <code>PRIMARY KEY</code>, <code>NOT NULL</code>, <code>UNIQUE</code>, <code>CHECK</code>, <code>REFERENCES</code>.<pre>CREATE TABLE t (
+  id INTEGER PRIMARY KEY,
+  qtd INTEGER NOT NULL CHECK (qtd &gt; 0)
+);</pre>`,
+  p:`Crie a tabela <code>avaliacoes</code> com, nessa ordem: <code>id</code> (inteiro, chave primária), <code>produto_id</code> (inteiro, obrigatório), <code>nota</code> (inteiro, aceita só de 1 a 5) e <code>comentario</code> (texto).`, s:`CREATE TABLE avaliacoes (id INTEGER PRIMARY KEY, produto_id INTEGER NOT NULL, nota INTEGER CHECK (nota BETWEEN 1 AND 5), comentario TEXT)`, chk:`SELECT name AS coluna, "notnull" AS obrigatoria, pk AS chave FROM pragma_table_info('avaliacoes') ORDER BY cid`, fail:`INSERT INTO avaliacoes (id, produto_id, nota, comentario) VALUES (999, 1, 9, 'x')`, failMsg:`A tabela aceitou nota 9. Falta a restrição CHECK entre 1 e 5.`, h:`<code>nota INTEGER CHECK (nota BETWEEN 1 AND 5)</code>`},
+ {t:"ALTER TABLE", c:`<code>ALTER TABLE … ADD COLUMN</code> evolui o esquema sem recriar a tabela. <code>DEFAULT</code> preenche as linhas existentes.`,
+  p:`Adicione à tabela <code>clientes</code> a coluna <code>ativo</code>, inteira, com valor padrão <code>1</code>.`, s:`ALTER TABLE clientes ADD COLUMN ativo INTEGER DEFAULT 1`, chk:`SELECT id, nome, ativo FROM clientes ORDER BY id`, h:`<code>ALTER TABLE clientes ADD COLUMN ativo INTEGER DEFAULT 1</code>`},
+ {t:"VIEW", c:`Uma <code>VIEW</code> é uma consulta salva com nome; ela não guarda dados, é reavaliada a cada uso.<pre>CREATE VIEW nome AS SELECT …;</pre>`,
+  p:`Crie a view <code>vw_receita_pedido</code> com as colunas <code>pedido_id</code> e <code>total</code> (soma de <code>quantidade * preco_unitario</code> por pedido).`, s:`CREATE VIEW vw_receita_pedido AS SELECT pedido_id, SUM(quantidade * preco_unitario) AS total FROM itens_pedido GROUP BY pedido_id`, chk:`SELECT pedido_id, ROUND(total,2) AS total FROM vw_receita_pedido ORDER BY pedido_id`, h:`Use <code>AS total</code> para nomear a coluna da soma.`},
+ {t:"Transação", c:`Uma transação agrupa comandos em uma unidade atômica (o A do ACID): ou tudo vale, ou nada.<pre>BEGIN;
+UPDATE …;
+INSERT …;
+COMMIT;   -- ou ROLLBACK</pre>`,
+  p:`Em uma transação: dê baixa de 2 unidades no estoque do produto 1 e registre o item de id <code>22</code> no pedido <code>14</code> (produto 1, quantidade 2, preço unitário 349.90).`, s:`BEGIN; UPDATE produtos SET estoque = estoque - 2 WHERE id = 1; INSERT INTO itens_pedido (id, pedido_id, produto_id, quantidade, preco_unitario) VALUES (22, 14, 1, 2, 349.90); COMMIT`, chk:`SELECT 'estoque do produto 1' AS verificacao, estoque AS valor FROM produtos WHERE id = 1 UNION ALL SELECT 'item 22: pedido', pedido_id FROM itens_pedido WHERE id = 22 UNION ALL SELECT 'item 22: quantidade', quantidade FROM itens_pedido WHERE id = 22 UNION ALL SELECT 'item 22: preço', preco_unitario FROM itens_pedido WHERE id = 22`, must:[[/\bBEGIN\b/i,"Abra a transação com BEGIN."],[/\bCOMMIT\b/i,"Confirme a transação com COMMIT."]], h:`<code>BEGIN; UPDATE …; INSERT …; COMMIT;</code>`},
+ {t:"Índice", c:`Índices (em geral árvores B) aceleram buscas e junções pela coluna indexada, ao custo de espaço e de escritas mais lentas. <code>EXPLAIN QUERY PLAN</code> mostra se a consulta usa o índice.`,
+  p:`Crie o índice <code>idx_pedidos_cliente</code> sobre a coluna <code>cliente_id</code> da tabela <code>pedidos</code>.`, s:`CREATE INDEX idx_pedidos_cliente ON pedidos (cliente_id)`, chk:`SELECT m.name AS indice, m.tbl_name AS tabela, i.name AS coluna FROM sqlite_master m, pragma_index_info(m.name) i WHERE m.type = 'index' AND m.name = 'idx_pedidos_cliente'`, h:`<code>CREATE INDEX nome ON tabela (coluna)</code>`}
+]},
+{name:"Chefões", tag:"problemas de entrevista", xp:60, levels:[
+ {t:"Segundo maior salário", c:`Clássico de entrevista. Há vários caminhos: subconsulta com <code>MAX</code>, <code>LIMIT/OFFSET</code> sobre valores distintos, ou <code>DENSE_RANK</code>.`,
+  p:`Retorne o segundo maior salário distinto da empresa (um único número).`, s:`SELECT MAX(salario) FROM funcionarios WHERE salario < (SELECT MAX(salario) FROM funcionarios)`, h:`O maior salário abaixo do maior de todos.`},
+ {t:"Compradores variados", c:`<code>COUNT(DISTINCT …)</code> com <code>HAVING</code> resolve problemas do tipo "pelo menos N tipos diferentes".`,
+  p:`Liste <code>nome</code> e número de categorias distintas dos clientes que compraram produtos de pelo menos 3 categorias diferentes (considere todos os pedidos).`, s:`SELECT c.nome, COUNT(DISTINCT pr.categoria_id) FROM clientes c JOIN pedidos p ON p.cliente_id = c.id JOIN itens_pedido i ON i.pedido_id = p.id JOIN produtos pr ON pr.id = i.produto_id GROUP BY c.id, c.nome HAVING COUNT(DISTINCT pr.categoria_id) >= 3`, h:`clientes → pedidos → itens → produtos; <code>HAVING COUNT(DISTINCT categoria_id) &gt;= 3</code>.`},
+ {t:"Ticket médio por estado", c:`Agregação em dois níveis: primeiro o total de cada pedido, depois a média por estado. Fazer a média direto sobre os itens daria outro número.`,
+  p:`Para pedidos <b>não cancelados</b>, mostre <code>estado</code> do cliente, número de pedidos e ticket médio (média do total por pedido, 2 casas), do maior ticket para o menor.`, s:`SELECT c.estado, COUNT(*), ROUND(AVG(t.total),2) AS ticket FROM (SELECT p.id, p.cliente_id, SUM(i.quantidade * i.preco_unitario) AS total FROM pedidos p JOIN itens_pedido i ON i.pedido_id = p.id WHERE p.status <> 'cancelado' GROUP BY p.id, p.cliente_id) t JOIN clientes c ON c.id = t.cliente_id GROUP BY c.estado ORDER BY ticket DESC`, o:1, h:`Total por pedido em uma tabela derivada ou CTE; depois agrupe por estado.`},
+ {t:"Mais vendidos", c:`Ranking com desempate explícito: sem uma segunda chave, o resultado de um <code>LIMIT</code> com empates não é determinístico.`,
+  p:`Mostre <code>nome</code> e quantidade total vendida dos 3 produtos mais vendidos em pedidos <b>não cancelados</b>. Ordene por quantidade (maior primeiro) e, no empate, por nome (A→Z).`, s:`SELECT pr.nome, SUM(i.quantidade) AS qtd FROM itens_pedido i JOIN pedidos p ON p.id = i.pedido_id JOIN produtos pr ON pr.id = i.produto_id WHERE p.status <> 'cancelado' GROUP BY pr.id, pr.nome ORDER BY qtd DESC, pr.nome LIMIT 3`, o:1, h:`<code>ORDER BY qtd DESC, nome LIMIT 3</code>`},
+ {t:"Gerentes e equipes", c:`Auto-junção com agregação: cada linha de subordinado "vota" no seu gerente.`,
+  p:`Para gerentes com 2 ou mais subordinados diretos, mostre o nome do gerente, o tamanho da equipe e a média salarial da equipe (2 casas).`, s:`SELECT g.nome, COUNT(*), ROUND(AVG(f.salario),2) FROM funcionarios f JOIN funcionarios g ON g.id = f.gerente_id GROUP BY g.id, g.nome HAVING COUNT(*) >= 2`, h:`Junte <code>funcionarios f</code> com <code>funcionarios g</code> em <code>g.id = f.gerente_id</code> e agrupe por gerente.`},
+ {t:"Crescimento mensal", c:`CTE + janela: agregue por mês e compare com o mês anterior usando <code>LAG</code>. É a base de relatórios mês a mês.`,
+  p:`Para pedidos <b>não cancelados</b>, mostre o mês (<code>AAAA-MM</code>), a receita do mês e a receita do mês anterior (2 casas), em ordem cronológica.`, s:`WITH m AS (SELECT strftime('%Y-%m', p.data_pedido) AS mes, SUM(i.quantidade * i.preco_unitario) AS receita FROM pedidos p JOIN itens_pedido i ON i.pedido_id = p.id WHERE p.status <> 'cancelado' GROUP BY mes) SELECT mes, ROUND(receita,2), ROUND(LAG(receita) OVER (ORDER BY mes),2) FROM m ORDER BY mes`, o:1, h:`CTE com receita por mês; depois <code>LAG(receita) OVER (ORDER BY mes)</code>.`}
+]}
+];
+
+/* Caça-bugs: a consulta inicial tem um defeito; conserte para produzir o resultado pedido. */
+const BUGS = [
+ {t:"Palavra perdida", p:`A consulta deveria listar nome e preço dos produtos acima de 1000, do mais caro para o mais barato. Ela nem executa.`, start:`SELECT nome, preco\nFROM produtos\nWHERE preco > 1000\nORDER preco DESC`, s:`SELECT nome, preco FROM produtos WHERE preco > 1000 ORDER BY preco DESC`, o:1, h:`Leia a mensagem de erro: o problema está perto de <code>ORDER</code>.`, why:`A cláusula é <code>ORDER BY</code>; faltava o <code>BY</code>.`},
+ {t:"Agregação no lugar errado", p:`Deveria mostrar categoria_id e total de produtos das categorias com mais de 2 produtos.`, start:`SELECT categoria_id, COUNT(*) AS total\nFROM produtos\nWHERE COUNT(*) > 2\nGROUP BY categoria_id`, s:`SELECT categoria_id, COUNT(*) FROM produtos GROUP BY categoria_id HAVING COUNT(*) > 2`, h:`<code>WHERE</code> roda antes do agrupamento.`, why:`Condições sobre agregações vão no <code>HAVING</code>, que é avaliado depois do <code>GROUP BY</code>.`},
+ {t:"Igual a nada", p:`Deveria listar o nome dos clientes sem e-mail. Executa, mas volta vazio.`, start:`SELECT nome\nFROM clientes\nWHERE email = NULL`, s:`SELECT nome FROM clientes WHERE email IS NULL`, h:`Comparar com <code>NULL</code> usando <code>=</code> nunca é verdadeiro.`, why:`<code>email = NULL</code> resulta em desconhecido. O teste correto é <code>IS NULL</code>.`},
+ {t:"O LEFT JOIN que virou INNER", p:`Deveria listar <b>todos</b> os clientes com o número de pedidos entregues (zero para quem não tem). Alguns clientes somem.`, start:`SELECT c.nome, COUNT(p.id) AS entregues\nFROM clientes c\nLEFT JOIN pedidos p ON p.cliente_id = c.id\nWHERE p.status = 'entregue'\nGROUP BY c.id, c.nome`, s:`SELECT c.nome, COUNT(p.id) FROM clientes c LEFT JOIN pedidos p ON p.cliente_id = c.id AND p.status = 'entregue' GROUP BY c.id, c.nome`, h:`O <code>WHERE</code> descarta as linhas em que <code>p.status</code> é NULL.`, why:`Filtrar a tabela da direita no <code>WHERE</code> anula o <code>LEFT JOIN</code>. A condição precisa ir para o <code>ON</code>.`},
+ {t:"Produto cartesiano", p:`Deveria mostrar cada produto com o nome da sua categoria (12 linhas). Voltam 60.`, start:`SELECT p.nome, c.nome\nFROM produtos p, categorias c`, s:`SELECT p.nome, c.nome FROM produtos p JOIN categorias c ON c.id = p.categoria_id`, h:`Falta dizer como as duas tabelas se relacionam.`, why:`Sem condição de junção, cada produto é combinado com todas as categorias (12 × 5).`},
+ {t:"Precedência", p:`Deveria listar nome e salário dos funcionários dos departamentos 1 <b>ou</b> 2 que ganham mais de 13000.`, start:`SELECT nome, salario\nFROM funcionarios\nWHERE departamento_id = 1 OR departamento_id = 2 AND salario > 13000`, s:`SELECT nome, salario FROM funcionarios WHERE (departamento_id = 1 OR departamento_id = 2) AND salario > 13000`, h:`<code>AND</code> é avaliado antes de <code>OR</code>.`, why:`Sem parênteses a condição vira "depto 1, ou (depto 2 e salário alto)". Parênteses ou <code>IN (1, 2)</code> resolvem.`},
+ {t:"Contando fantasmas", p:`Deveria mostrar cada departamento e quantos funcionários tem. Pesquisa aparece com 1, mas não tem ninguém.`, start:`SELECT d.nome, COUNT(*) AS funcionarios\nFROM departamentos d\nLEFT JOIN funcionarios f ON f.departamento_id = d.id\nGROUP BY d.id, d.nome`, s:`SELECT d.nome, COUNT(f.id) FROM departamentos d LEFT JOIN funcionarios f ON f.departamento_id = d.id GROUP BY d.id, d.nome`, h:`<code>COUNT(*)</code> conta a linha preenchida com NULL.`, why:`No <code>LEFT JOIN</code> o departamento vazio ainda gera uma linha. <code>COUNT(f.id)</code> ignora o NULL e dá zero.`},
+ {t:"A armadilha do NOT IN", p:`Deveria listar o nome dos funcionários que não gerenciam ninguém. Volta vazio.`, start:`SELECT nome\nFROM funcionarios\nWHERE id NOT IN (SELECT gerente_id FROM funcionarios)`, s:`SELECT nome FROM funcionarios f WHERE NOT EXISTS (SELECT 1 FROM funcionarios s WHERE s.gerente_id = f.id)`, h:`A subconsulta devolve um <code>NULL</code> (a CTO não tem gerente).`, why:`<code>x NOT IN (…, NULL)</code> nunca é verdadeiro. Filtre os NULL na subconsulta ou use <code>NOT EXISTS</code>.`},
+ {t:"Divisão inteira", p:`Deveria retornar o percentual de pedidos entregues, com 2 casas (57.14). Retorna 0.`, start:`SELECT COUNT(CASE WHEN status = 'entregue' THEN 1 END) / COUNT(*) * 100\nFROM pedidos`, s:`SELECT ROUND(100.0 * COUNT(CASE WHEN status = 'entregue' THEN 1 END) / COUNT(*), 2) FROM pedidos`, h:`Inteiro dividido por inteiro dá inteiro.`, why:`<code>8 / 14</code> em aritmética inteira é 0. Multiplicar por <code>100.0</code> antes força ponto flutuante.`}
+];
+BUGS.forEach((b,i)=>{b.id="b"+(i+1);b.xp=30;b.bug=true;});
+MODULES.forEach((m,mi)=>m.levels.forEach((l,li)=>{l.id=`m${mi+1}-${li+1}`;l.xp=m.xp;l.mi=mi;l.li=li;}));
+const ALL = MODULES.flatMap(m=>m.levels);
+const BY_ID = Object.fromEntries([...ALL,...BUGS].map(l=>[l.id,l]));
+const RANKS = [["Calouro",0],["Estagiário",60],["Júnior",160],["Pleno",320],["Sênior",540],["Especialista",800],["DBA",1100],["Arquiteto de Dados",1450],["Staff Engineer",1850],["Lenda do SQL",2300]];
+const CHIPS = ["SELECT","FROM","WHERE","JOIN","LEFT JOIN","ON","GROUP BY","HAVING","ORDER BY","DESC","LIMIT","AS","AND","OR","NOT","IN","IS NULL","COUNT(*)","SUM()","AVG()","DISTINCT","CASE WHEN","THEN","ELSE","END","WITH","OVER ()","*",",","(",")","=","<>","'","%",";"];
+
+/* ============================== ESTADO ============================== */
+const KEY = "sql-arena-v1";
+let S = {xp:0, done:{}, drafts:{}, free:false, daily:{last:"",streak:0}, blitz:0};
+try{ const raw = localStorage.getItem(KEY); if(raw) S = Object.assign(S, JSON.parse(raw)); }catch(e){}
+const save = ()=>{ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} };
+const today = ()=>{ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+function rank(xp){ let i=0; while(i+1<RANKS.length && xp>=RANKS[i+1][1]) i++; const lo=RANKS[i][1], hi=i+1<RANKS.length?RANKS[i+1][1]:null;
+  return {n:i+1, name:RANKS[i][0], lo, hi, pct: hi?Math.round(100*(xp-lo)/(hi-lo)):100}; }
+const modDone = mi => MODULES[mi].levels.filter(l=>S.done[l.id]).length;
+const modNeed = mi => Math.ceil(MODULES[mi].levels.length*0.6);
+const modOpen = mi => S.free || mi===0 || modDone(mi-1) >= modNeed(mi-1);
+const lvlOpen = l => S.free || (modOpen(l.mi) && (l.li===0 || !!S.done[MODULES[l.mi].levels[l.li-1].id]));
+const nextLevel = ()=> ALL.find(l=>!S.done[l.id] && lvlOpen(l)) || null;
+const stars = n => "★".repeat(n)+"☆".repeat(3-n);
+
+/* ============================== MOTOR SQL ============================== */
+let SQL = null, META = [], sandbox = null;
+const EMPTY = {columns:[],values:[]};
+function freshDb(){ const d = new SQL.Database(); d.run(SEED); return d; }
+function runLevelSql(level, sql){            // executa em banco novo; devolve o conjunto a comparar
+  const db = freshDb();
+  try{
+    const all = db.exec(sql);
+    if(level.chk){
+      const r = db.exec(level.chk);
+      let failOk = true;
+      if(level.fail){ failOk = false; try{ db.run(level.fail); }catch(e){ failOk = true; } }
+      return {res: r.length? r[r.length-1] : EMPTY, failOk};
+    }
+    return {res: all.length? all[all.length-1] : EMPTY, failOk:true};
+  } finally { db.close(); }
+}
+const expCache = {};
+const expected = level => expCache[level.id] || (expCache[level.id] = runLevelSql(level, level.s).res);
+const cellEq = (a,b)=> (typeof a==="number" && typeof b==="number") ? Math.abs(a-b) < 0.006 : (a===null||b===null ? a===b : String(a)===String(b));
+const rowKey = r => r.map(v=> v===null ? "\u0000" : typeof v==="number" ? v.toFixed(2) : String(v)).join("\u001f");
+const rowsEq = (A,B)=> A.every((r,i)=> r.every((v,j)=> cellEq(v,B[i][j])));
+function compare(exp, got, ordered){
+  if(!got.columns.length) return "Sua consulta não retornou linhas. O resultado esperado tem "+exp.values.length+".";
+  if(got.columns.length !== exp.columns.length) return `Número de colunas diferente: esperado ${exp.columns.length}, obtido ${got.columns.length}.`;
+  if(got.values.length !== exp.values.length) return `Número de linhas diferente: esperado ${exp.values.length}, obtido ${got.values.length}.`;
+  const sort = v => [...v].sort((a,b)=> rowKey(a)<rowKey(b)?-1:rowKey(a)>rowKey(b)?1:0);
+  if(ordered){
+    if(rowsEq(exp.values, got.values)) return null;
+    return rowsEq(sort(exp.values), sort(got.values)) ? "As linhas estão certas, mas a ordem não é a pedida." : "Os valores não batem com o resultado esperado.";
+  }
+  return rowsEq(sort(exp.values), sort(got.values)) ? null : "Os valores não batem com o resultado esperado. Compare com a aba Esperado.";
+}
+function evaluate(level, sql){
+  if(!sql.trim()) return {error:"Escreva uma consulta antes de executar."};
+  let out;
+  try{ out = runLevelSql(level, sql); }catch(e){ return {error:String(e.message||e)}; }
+  for(const [re,msg] of (level.must||[])) if(!re.test(sql)) return {ok:false, msg, res:out.res};
+  if(!out.failOk) return {ok:false, msg:level.failMsg, res:out.res};
+  const msg = compare(expected(level), out.res, !!level.o);
+  return {ok:!msg, msg, res:out.res};
+}
+function buildMeta(){
+  const db = freshDb();
+  const names = db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY rowid")[0].values.map(r=>r[0]);
+  META = names.map(n=>{
+    const cols = db.exec(`PRAGMA table_info(${n})`)[0].values.map(r=>({name:r[1], type:r[2], pk:!!r[5]}));
+    const fk = db.exec(`PRAGMA foreign_key_list(${n})`)[0];
+    (fk?fk.values:[]).forEach(r=>{ const c=cols.find(c=>c.name===r[3]); if(c) c.fk=r[2]; });
+    return {name:n, cols, data: db.exec(`SELECT * FROM ${n}`)[0]};
+  });
+  db.close();
+}
+function loadScript(src){ return new Promise((ok,no)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=()=>no(new Error("script")); document.head.appendChild(s); }); }
+async function loadSql(){
+  const base = "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/";
+  const timeout = new Promise((_,no)=>setTimeout(()=>no(new Error("timeout")),12000));
+  try{
+    if(typeof initSqlJs!=="function") throw new Error("sem script");
+    return await Promise.race([initSqlJs({locateFile:f=>base+f}), timeout]);
+  }catch(e){
+    await loadScript(base+"sql-asm.js");            // alternativa sem WebAssembly
+    return await initSqlJs();
+  }
+}
+
+/* ============================== UI ============================== */
+const $ = s => document.querySelector(s);
+const app = $("#app");
+const esc = s => String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let view = "inicio", cur = null, blitz = null, ptab = "missao", resetArmed = false, toastT = 0;
+const VIEWS = [["inicio","Início"],["campanha","Campanha"],["bugs","Caça-bugs"],["playground","Playground"],["perfil","Perfil"]];
+
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2600); }
+function go(v){ if(v!=="jogar"){ stopBlitz(); } view=v; if(location.hash!=="#"+v) location.hash=v; else render(); window.scrollTo(0,0); }
+function renderChrome(){
+  const active = view==="jogar" ? (cur && cur.mode==="bug" ? "bugs" : cur && cur.mode==="camp" ? "campanha" : "inicio") : view;
+  $("#nav").innerHTML = VIEWS.map(([id,l])=>`<button data-go="${id}" ${id===active?'aria-current="page"':""}>${l}</button>`).join("");
+  const r = rank(S.xp);
+  $("#xpchip").innerHTML = `<div class="bar" title="${S.xp} XP"><i style="width:${r.pct}%"></i></div><span class="lv num">Nv ${r.n} · ${S.xp} XP</span>`;
+}
+function table(res, max){
+  if(!res || !res.columns.length) return `<p class="muted">Nenhuma linha.</p>`;
+  const rows = res.values.slice(0, max||100);
+  return `<div class="tbl"><table><thead><tr>${res.columns.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${
+    rows.map(r=>`<tr>${r.map(v=> v===null?`<td class="null">NULL</td>`: typeof v==="number"?`<td class="r">${v}</td>`:`<td>${esc(v)}</td>`).join("")}</tr>`).join("")
+  }</tbody></table></div>${res.values.length>rows.length?`<p class="muted">Mostrando ${rows.length} de ${res.values.length} linhas.</p>`:""}`;
+}
+function schemaHtml(){
+  return `<p class="muted">Loja de hardware fictícia. Toque em uma coluna para inseri-la no editor.</p>` + META.map(t=>`
+  <details class="t"><summary>${t.name}<span>${t.data.values.length} linhas</span></summary>
+    <div class="cols"><button class="col" data-ins="${t.name}">${t.name} <small>tabela</small></button>${t.cols.map(c=>`<button class="col ${c.pk?"pk":""}" data-ins="${c.name}">${c.name} <small>${c.type.toLowerCase()}${c.pk?" · PK":""}${c.fk?" → "+c.fk:""}</small></button>`).join("")}</div>
+    ${table(t.data, 20)}
+  </details>`).join("");
+}
+function editorHtml(value, runLabel){
+  return `<div class="editor">
+    <textarea id="sql" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Editor SQL" placeholder="-- escreva seu SQL aqui">${esc(value||"")}</textarea>
+    <div class="chips" aria-label="Atalhos de teclado SQL">${CHIPS.map(c=>`<button class="chip" data-ins="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+    <div class="actions"><button class="btn primary" data-act="run">▶ ${runLabel}</button><span class="muted" style="font-size:12px">Ctrl + Enter</span><span class="sp"></span>%EXTRA%</div>
+  </div>`;
+}
+
+/* ---------- telas ---------- */
+function homeView(){
+  const r = rank(S.xp), nx = nextLevel(), doneN = ALL.filter(l=>S.done[l.id]).length;
+  const dailyDone = S.daily.last===today();
+  return `<div class="stack">
+  <section class="hero">
+    <div class="stack">
+      <span class="label">Treino de SQL para engenharia</span>
+      <h1>Escreva a consulta. Veja o resultado. <em>Suba de nível.</em></h1>
+      <p class="muted">${ALL.length} fases em ${MODULES.length} módulos, do primeiro <code>SELECT</code> a funções de janela e transações. O banco roda no seu navegador; nada é enviado para servidor.</p>
+      <div class="row">
+        ${nx?`<button class="btn primary" data-play="${nx.id}">${doneN?"Continuar":"Começar"}: ${esc(nx.t)}</button>`:`<button class="btn primary" data-go="campanha">Rever a campanha</button>`}
+        <button class="btn" data-go="campanha">Escolher fase</button>
+      </div>
+    </div>
+    <div class="term" aria-hidden="true"><span class="c">-- seu progresso</span>
+<span class="k">SELECT</span> nivel, titulo, xp, fases
+<span class="k">FROM</span> jogador;
+
+ nivel | titulo${" ".repeat(Math.max(1,14-6))}| xp   | fases
+-------+${"-".repeat(15)}+------+-------
+ <span class="g">${String(r.n).padEnd(5)}</span> | <span class="g">${esc(r.name.slice(0,13).padEnd(13))}</span> | <span class="g">${String(S.xp).padEnd(4)}</span> | <span class="g">${doneN}/${ALL.length}</span></div>
+  </section>
+  <section class="modes">
+    <button class="mode" data-go="campanha"><span class="tag">Modo principal</span><h3>Campanha</h3><p class="muted">Conceito, missão e correção automática. Cada módulo libera o próximo.</p><span class="foot">${doneN}/${ALL.length} fases concluídas</span></button>
+    <button class="mode" data-act="blitz"><span class="tag">Contra o relógio</span><h3>Relâmpago</h3><p class="muted">5 minutos. Resolva o máximo de consultas sorteadas das fases liberadas.</p><span class="foot">Recorde: ${S.blitz} ${S.blitz===1?"acerto":"acertos"}</span></button>
+    <button class="mode" data-go="bugs"><span class="tag">Depuração</span><h3>Caça-bugs</h3><p class="muted">Consultas quebradas com erros reais de produção. Ache o defeito e conserte.</p><span class="foot">${BUGS.filter(b=>S.done[b.id]).length}/${BUGS.length} bugs corrigidos</span></button>
+    <button class="mode" data-act="daily"><span class="tag">Uma por dia</span><h3>Desafio do dia</h3><p class="muted">Uma fase sorteada pela data. Vale 40 XP de bônus e mantém a sequência.</p><span class="foot">${dailyDone?"Feito hoje · ":""}Sequência: ${S.daily.streak} ${S.daily.streak===1?"dia":"dias"}</span></button>
+    <button class="mode" data-go="playground"><span class="tag">Livre</span><h3>Playground</h3><p class="muted">Banco aberto para qualquer comando: teste ideias, crie tabelas, quebre coisas.</p><span class="foot">SQLite ${esc(sqliteVersion)}</span></button>
+  </section></div>`;
+}
+function mapView(){
+  const nx = nextLevel();
+  return `<div class="stack"><div class="row"><h1>Campanha</h1><span class="muted">Conclua 60% de um módulo para liberar o seguinte.</span></div>
+  ${MODULES.map((m,mi)=>{ const open=modOpen(mi), d=modDone(mi);
+    return `<section class="mod ${open?"":"locked"}">
+      <div class="mod-head"><span class="label">Módulo ${mi+1}</span><h2>${esc(m.name)}</h2><span class="muted" style="font-size:13px">${esc(m.tag)}</span><span class="prog num">${d}/${m.levels.length} · ${m.xp} XP por fase</span></div>
+      <div class="bar"><i style="width:${100*d/m.levels.length}%"></i></div>
+      ${open?"":`<p class="muted">Bloqueado: conclua ${modNeed(mi-1)} fases de ${esc(MODULES[mi-1].name)}.</p>`}
+      <div class="lvls">${m.levels.map(l=>{ const st=S.done[l.id];
+        return `<button class="lvl ${st?"done":""} ${nx&&nx.id===l.id?"next":""}" data-play="${l.id}" ${lvlOpen(l)?"":"disabled"}><span class="n">${mi+1}.${l.li+1}</span><span class="t">${esc(l.t)}</span><span class="s">${st?stars(st):lvlOpen(l)?"":"bloqueada"}</span></button>`; }).join("")}</div>
+    </section>`; }).join("")}</div>`;
+}
+function bugsView(){
+  return `<div class="stack"><div class="row"><h1>Caça-bugs</h1><span class="muted">Cada consulta tem um defeito clássico. 30 XP por correção.</span></div>
+  <div class="lvls" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${BUGS.map((b,i)=>{ const st=S.done[b.id];
+    return `<button class="lvl ${st?"done":""}" data-play="${b.id}"><span class="n">BUG ${i+1}</span><span class="t">${esc(b.t)}</span><span class="s">${st?stars(st):""}</span></button>`; }).join("")}</div></div>`;
+}
+function profileView(){
+  const r = rank(S.xp), totalStars = Object.values(S.done).reduce((a,b)=>a+b,0);
+  return `<div class="stack"><h1>Perfil</h1>
+  <div class="grid2">
+    <div class="card"><span class="label">Nível ${r.n}</span><div class="big">${esc(r.name)}</div><div class="bar"><i style="width:${r.pct}%"></i></div>
+      <p class="muted num">${S.xp} XP${r.hi?` · faltam ${r.hi-S.xp} para ${esc(RANKS[r.n][0])}`:" · nível máximo"}</p></div>
+    <div class="card"><span class="label">Números</span>
+      <p class="num"><b>${ALL.filter(l=>S.done[l.id]).length}</b>/${ALL.length} fases · <b>${BUGS.filter(b=>S.done[b.id]).length}</b>/${BUGS.length} bugs</p>
+      <p class="num"><b>${totalStars}</b>/${(ALL.length+BUGS.length)*3} estrelas</p>
+      <p class="num">Sequência diária: <b>${S.daily.streak}</b> · Recorde relâmpago: <b>${S.blitz}</b></p></div>
+  </div>
+  <div class="card"><span class="label">Progresso por módulo</span>
+    ${MODULES.map((m,mi)=>`<div class="prow"><span>${mi+1}. ${esc(m.name)}</span><div class="bar"><i style="width:${100*modDone(mi)/m.levels.length}%"></i></div><span class="num muted">${modDone(mi)}/${m.levels.length}</span></div>`).join("")}</div>
+  <div class="card"><span class="label">Ajustes</span>
+    <div class="row"><button class="btn" data-act="free">${S.free?"Voltar ao desbloqueio por progresso":"Liberar todas as fases"}</button><span class="muted">${S.free?"Todas as fases estão abertas.":"Para quem já domina o básico e quer pular direto."}</span></div>
+    <div class="row"><button class="btn" data-act="reset">${resetArmed?"Confirmar: apagar tudo":"Zerar progresso"}</button>${resetArmed?`<button class="btn ghost" data-act="reset-cancel">Cancelar</button>`:""}<span class="muted">O progresso fica salvo só neste navegador.</span></div>
+  </div></div>`;
+}
+function playView(){
+  const l = cur.level, exp = expected(l), idx = l.bug ? "Bug "+(BUGS.indexOf(l)+1) : `Fase ${l.mi+1}.${l.li+1} · ${esc(MODULES[l.mi].name)}`;
+  const modeName = {camp:"Campanha", bug:"Caça-bugs", daily:"Desafio do dia", blitz:"Relâmpago"}[cur.mode];
+  const body = ptab==="esquema" ? schemaHtml()
+    : ptab==="esperado" ? `<p class="muted">${l.chk?"Estado do banco depois dos seus comandos:":"Seu resultado precisa ter estas linhas"+(l.o?", nesta ordem.":" (a ordem não importa).")} Os nomes das colunas não são conferidos.</p>${table(exp,60)}`
+    : `${l.c?`<div class="concept"><span class="label">Conceito</span><div>${l.c}</div></div>`:""}
+       <div class="task"><span class="label">Missão</span><p>${l.p}</p></div>
+       ${cur.hint?`<div class="hint"><b>Dica:</b> ${l.h}</div>`:""}
+       ${cur.sol?`<div class="sol"><span class="label">Solução de referência</span><pre>${esc(l.s)}</pre>${l.why?`<p style="margin-top:8px">${l.why}</p>`:""}</div>`:""}`;
+  const extra = cur.mode==="blitz" ? `<button class="btn small" data-act="skip">Pular</button>`
+    : `${l.start?`<button class="btn small" data-act="restore">Restaurar</button>`:""}<button class="btn small" data-act="hint" ${cur.hint?"disabled":""}>Dica</button><button class="btn small" data-act="sol" ${cur.sol?"disabled":""}>Ver solução</button>`;
+  return `<div class="stack">
+  <div class="play-head"><button class="btn small" data-act="back">← Voltar</button>
+    <div><span class="label">${modeName} · ${idx}</span><h1>${esc(l.t)}</h1></div>
+    ${cur.mode==="blitz"?`<span class="timer num" id="timer">${fmtTime(blitz.left)} · ${blitz.score} ✓</span>`:""}</div>
+  <div class="bench">
+    <section class="panel"><div class="ptabs" role="tablist">${[["missao","Missão"],["esquema","Esquema"],["esperado","Esperado"]].map(([k,n])=>`<button role="tab" data-ptab="${k}" aria-selected="${ptab===k}">${n}</button>`).join("")}</div><div class="pbody" id="pbody">${body}</div></section>
+    <div class="stack">
+      <section class="panel">${editorHtml(cur.draft, "Executar e conferir").replace("%EXTRA%", extra)}</section>
+      <section class="panel"><div class="pbody" id="out"><span class="label">Resultado</span><p class="muted">Execute sua consulta para ver a saída aqui.</p></div></section>
+    </div>
+  </div></div>`;
+}
+function sandboxView(){
+  return `<div class="stack"><div class="row"><h1>Playground</h1><span class="muted">Banco livre. Alterações valem até você restaurar ou recarregar a página.</span></div>
+  <div class="bench">
+    <section class="panel"><div class="pbody">${schemaHtml()}</div></section>
+    <div class="stack">
+      <section class="panel">${editorHtml(S.drafts.sandbox ?? "SELECT c.nome, COUNT(p.id) AS pedidos\nFROM clientes c\nLEFT JOIN pedidos p ON p.cliente_id = c.id\nGROUP BY c.id, c.nome\nORDER BY pedidos DESC;", "Executar").replace("%EXTRA%", `<button class="btn small" data-act="sb-reset">Restaurar banco</button>`)}</section>
+      <section class="panel"><div class="pbody" id="out"><span class="label">Resultado</span><p class="muted">Vários comandos separados por <code>;</code> são aceitos.</p></div></section>
+    </div></div></div>`;
+}
+function blitzEndView(){
+  const rec = blitz.score > blitz.prev;
+  return `<div class="stack"><div class="card" style="max-width:560px"><span class="label">Relâmpago encerrado</span><div class="big num">${blitz.score} ${blitz.score===1?"acerto":"acertos"}</div>
+    <p class="muted">${rec?"Novo recorde. ":""}Você ganhou ${blitz.score*5} XP nesta rodada. Recorde atual: ${S.blitz}.</p>
+    <div class="row"><button class="btn primary" data-act="blitz">Jogar de novo</button><button class="btn" data-go="inicio">Início</button></div></div></div>`;
+}
+function render(){
+  renderChrome();
+  if(view==="jogar" && !cur) view="inicio";
+  app.innerHTML = view==="campanha"?mapView(): view==="bugs"?bugsView(): view==="perfil"?profileView(): view==="playground"?sandboxView(): view==="jogar"?playView(): view==="fim"?blitzEndView(): homeView();
+}
+
+/* ---------- jogo ---------- */
+function startLevel(id, mode){
+  const l = BY_ID[id]; if(!l) return;
+  mode = mode || (l.bug?"bug":"camp");
+  cur = {level:l, mode, hint:false, sol:false, solved:false, draft: mode==="blitz" ? "" : (S.drafts[id] ?? l.start ?? "")};
+  ptab = "missao"; view = "jogar";
+  if(location.hash!=="#jogar") location.hash="jogar"; else render();
+  window.scrollTo(0,0);
+}
+function pool(){ const p = ALL.filter(l=>!l.chk && (S.free || modOpen(l.mi) || l.mi<3)); return p; }
+function startDaily(){ const p = ALL.filter(l=>!l.chk); let h=0; for(const ch of today()) h=(h*31+ch.charCodeAt(0))>>>0; startLevel(p[h%p.length].id, "daily"); }
+const fmtTime = s => Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+function startBlitz(){
+  stopBlitz();
+  const q = pool().sort(()=>Math.random()-.5);
+  blitz = {left:300, score:0, q, i:0, prev:S.blitz, t:setInterval(()=>{
+    blitz.left--; const el=$("#timer"); if(el) el.textContent = fmtTime(Math.max(0,blitz.left))+" · "+blitz.score+" ✓";
+    if(blitz.left<=0) endBlitz();
+  },1000)};
+  startLevel(q[0].id, "blitz");
+}
+function nextBlitz(){ blitz.i++; if(blitz.i>=blitz.q.length){ endBlitz(); return; } startLevel(blitz.q[blitz.i].id, "blitz"); }
+function stopBlitz(){ if(blitz && blitz.t){ clearInterval(blitz.t); blitz.t=0; } }
+function endBlitz(){ stopBlitz(); S.xp += blitz.score*5; if(blitz.score>S.blitz) S.blitz=blitz.score; save(); cur=null; view="fim"; if(location.hash!=="#fim") location.hash="fim"; else render(); }
+function award(){
+  const l = cur.level, before = rank(S.xp).n; let gained = 0, st = cur.sol?1:cur.hint?2:3;
+  if(cur.mode==="blitz"){ blitz.score++; }
+  else if(cur.mode==="daily"){
+    if(S.daily.last!==today()){ const y=new Date(); y.setDate(y.getDate()-1);
+      const ys = y.getFullYear()+"-"+String(y.getMonth()+1).padStart(2,"0")+"-"+String(y.getDate()).padStart(2,"0");
+      S.daily.streak = S.daily.last===ys ? S.daily.streak+1 : 1; S.daily.last=today(); gained=40; }
+  } else {
+    if(!S.done[l.id]) gained = l.xp;
+    S.done[l.id] = Math.max(S.done[l.id]||0, st);
+  }
+  S.xp += gained; save();
+  const after = rank(S.xp);
+  if(after.n>before) toast(`Nível ${after.n}: ${after.name}`);
+  return {gained, st};
+}
+function nextAfter(){
+  const l = cur.level;
+  if(cur.mode==="bug"){ const n = BUGS[BUGS.indexOf(l)+1]; return n?{id:n.id,label:"Próximo bug"}:null; }
+  if(cur.mode==="camp"){ const n = ALL[ALL.indexOf(l)+1]; return n && lvlOpen(n) ? {id:n.id,label:"Próxima fase"} : null; }
+  return null;
+}
+function runPlay(){
+  const sql = $("#sql").value, l = cur.level, out = $("#out");
+  const r = evaluate(l, sql);
+  if(r.error){ out.innerHTML = `<span class="label">Resultado</span><div class="err">Erro: ${esc(r.error)}</div>`; return; }
+  let head;
+  if(r.ok){
+    const first = !cur.solved; cur.solved = true;
+    const a = first ? award() : {gained:0, st: cur.sol?1:cur.hint?2:3};
+    renderChrome();
+    if(cur.mode==="blitz"){ head = `<div class="verdict ok">Correto. Próxima consulta…</div>`; setTimeout(()=>{ if(view==="jogar" && cur && cur.mode==="blitz" && cur.level===l) nextBlitz(); }, 900); }
+    else { const n = nextAfter();
+      head = `<div class="verdict ok"><span>Correto</span>${cur.mode!=="daily"?`<span class="stars" aria-label="${a.st} de 3 estrelas">${stars(a.st)}</span>`:""}<span class="num">${a.gained?`+${a.gained} XP`:"já concluída"}</span><span class="sp"></span>${n?`<button class="btn primary small" data-play="${n.id}">${n.label} →</button>`:`<button class="btn primary small" data-act="back">Concluir</button>`}</div>${l.why?`<p><b>O defeito:</b> ${l.why}</p>`:""}`; }
+  } else head = `<div class="verdict bad">${esc(r.msg)}</div>`;
+  out.innerHTML = `<span class="label">${l.chk?"Estado do banco após seus comandos":"Sua saída"}</span>${head}${table(r.res)}`;
+  if(window.innerWidth<900) out.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function runSandbox(){
+  const sql = $("#sql").value, out = $("#out");
+  if(!sandbox) sandbox = freshDb();
+  try{
+    const res = sandbox.exec(sql), n = sandbox.getRowsModified();
+    out.innerHTML = `<span class="label">Resultado</span>` + (res.length ? res.map(r=>table(r,200)).join("") : `<div class="verdict ok">Comando executado. ${n} ${n===1?"linha afetada":"linhas afetadas"}.</div>`);
+  }catch(e){ out.innerHTML = `<span class="label">Resultado</span><div class="err">Erro: ${esc(e.message||e)}</div>`; }
+}
+function insertText(txt){
+  const ta = $("#sql"); if(!ta) return;
+  const a = ta.selectionStart, b = ta.selectionEnd, v = ta.value;
+  const pad = /^[,;)'%]$/.test(txt) ? "" : " ";
+  const ins = txt==="SUM()"||txt==="AVG()"||txt==="OVER ()" ? txt : txt+pad;
+  ta.value = v.slice(0,a)+ins+v.slice(b);
+  const pos = a + (/\(\)$/.test(txt) ? txt.length-1 : ins.length);
+  ta.focus(); ta.setSelectionRange(pos,pos); saveDraft();
+}
+function saveDraft(){ const ta=$("#sql"); if(!ta) return;
+  if(view==="playground") S.drafts.sandbox = ta.value; else if(cur){ cur.draft = ta.value; if(cur.mode!=="blitz") S.drafts[cur.level.id] = ta.value; }
+  save(); }
+
+/* ---------- eventos ---------- */
+document.addEventListener("click", e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  const d = b.dataset;
+  if(d.go) return go(d.go);
+  if(d.play) return startLevel(d.play);
+  if(d.ins!==undefined) return insertText(d.ins);
+  if(d.ptab){ ptab=d.ptab; saveDraft(); const keep=$("#out").innerHTML; render(); $("#out").innerHTML=keep; return; }
+  switch(d.act){
+    case "run": saveDraft(); return view==="playground" ? runSandbox() : runPlay();
+    case "hint": case "sol": { cur[d.act]=true; ptab="missao"; saveDraft(); const keep=$("#out").innerHTML; render(); $("#out").innerHTML=keep; return; }
+    case "restore": $("#sql").value = cur.level.start; return saveDraft();
+    case "back": { const m=cur?cur.mode:""; if(m==="blitz") return endBlitz(); cur=null; return go(m==="bug"?"bugs":m==="camp"?"campanha":"inicio"); }
+    case "skip": return nextBlitz();
+    case "blitz": return startBlitz();
+    case "daily": return startDaily();
+    case "sb-reset": if(sandbox) sandbox.close(); sandbox=freshDb(); $("#out").innerHTML=`<span class="label">Resultado</span><div class="verdict ok">Banco restaurado ao estado original.</div>`; return;
+    case "free": S.free=!S.free; save(); return render();
+    case "reset": if(!resetArmed){ resetArmed=true; return render(); }
+      S={xp:0,done:{},drafts:{},free:false,daily:{last:"",streak:0},blitz:0}; save(); resetArmed=false; toast("Progresso zerado"); return render();
+    case "reset-cancel": resetArmed=false; return render();
+  }
+});
+document.addEventListener("keydown", e=>{
+  if(e.target.id!=="sql") return;
+  if((e.ctrlKey||e.metaKey) && e.key==="Enter"){ e.preventDefault(); saveDraft(); view==="playground"?runSandbox():runPlay(); }
+  else if(e.key==="Tab" && !e.shiftKey){ e.preventDefault(); const ta=e.target, a=ta.selectionStart; ta.value=ta.value.slice(0,a)+"  "+ta.value.slice(ta.selectionEnd); ta.setSelectionRange(a+2,a+2); }
+});
+document.addEventListener("input", e=>{ if(e.target.id==="sql") saveDraft(); });
+window.addEventListener("hashchange", ()=>{
+  const h = location.hash.slice(1) || "inicio";
+  if(h==="jogar" && !cur){ location.hash="inicio"; return; }
+  if(h!=="jogar" && h!=="fim" && blitz && blitz.t) stopBlitz();
+  if(h!=="jogar") cur = h==="fim" ? null : cur;
+  view = h; resetArmed=false; render();
+});
+
+/* ---------- autoteste (console): confere todas as soluções de referência ---------- */
+window.__selftest = function(){
+  const bad = [];
+  for(const l of [...ALL,...BUGS]){
+    try{
+      const r = evaluate(l, l.s);
+      if(!r.ok) bad.push(l.id+": solução reprovada: "+(r.error||r.msg));
+      else if(!expected(l).values.length) bad.push(l.id+": esperado vazio");
+      if(l.start){ const b = evaluate(l, l.start); if(b.ok) bad.push(l.id+": a consulta com bug passa"); }
+    }catch(e){ bad.push(l.id+": "+e.message); }
+  }
+  return {total: ALL.length+BUGS.length, bad};
+};
+
+/* ---------- início ---------- */
+let sqliteVersion = "";
+(async function boot(){
+  renderChrome();
+  try{
+    SQL = await loadSql();
+    buildMeta();
+    const d = freshDb(); sqliteVersion = d.exec("SELECT sqlite_version()")[0].values[0][0]; d.close();
+  }catch(e){
+    app.innerHTML = `<div class="card"><h2>Não foi possível carregar o motor SQL</h2><p class="muted">O app baixa o SQLite (sql.js) da internet na primeira abertura. Verifique a conexão e recarregue a página.</p><div class="err">${esc(e.message||e)}</div></div>`;
+    return;
+  }
+  const h = location.hash.slice(1);
+  view = VIEWS.some(v=>v[0]===h) ? h : "inicio";
+  render();
+})();
+</script>
+</body>
+</html>
