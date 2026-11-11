@@ -423,15 +423,40 @@ const BUGS = [
  {t:"Divisão inteira", p:`Deveria retornar o percentual de pedidos entregues, com 2 casas (57.14). Retorna 0.`, start:`SELECT COUNT(CASE WHEN status = 'entregue' THEN 1 END) / COUNT(*) * 100\nFROM pedidos`, s:`SELECT ROUND(100.0 * COUNT(CASE WHEN status = 'entregue' THEN 1 END) / COUNT(*), 2) FROM pedidos`, h:`Inteiro dividido por inteiro dá inteiro.`, why:`<code>8 / 14</code> em aritmética inteira é 0. Multiplicar por <code>100.0</code> antes força ponto flutuante.`}
 ];
 BUGS.forEach((b,i)=>{b.id="b"+(i+1);b.xp=30;b.bug=true;});
+
+/* Simulado: questões exclusivas, que não aparecem em nenhum outro modo. Uma de cada faixa por prova. */
+const SIM_SECS = 15*60;
+const SIM = [
+ {tier:"Fácil", pts:20, qs:[
+  {t:"Contratações recentes", p:`Liste <code>nome</code> e <code>data_admissao</code> dos funcionários admitidos a partir de 1º de janeiro de 2019, da admissão mais antiga para a mais recente.`, s:`SELECT nome, data_admissao FROM funcionarios WHERE data_admissao >= '2019-01-01' ORDER BY data_admissao`, o:1},
+  {t:"Estados com mais clientes", p:`Mostre cada <code>estado</code> e o número de clientes, apenas para os estados com 2 ou mais clientes.`, s:`SELECT estado, COUNT(*) FROM clientes GROUP BY estado HAVING COUNT(*) >= 2`},
+  {t:"Fora de estoque", p:`Liste <code>nome</code> e <code>categoria_id</code> dos produtos com estoque zerado.`, s:`SELECT nome, categoria_id FROM produtos WHERE estoque = 0`},
+  {t:"Folha de pagamento", p:`Considerando só funcionários que pertencem a algum departamento, mostre em uma linha a soma dos salários e o salário médio (2 casas), nessa ordem.`, s:`SELECT SUM(salario), ROUND(AVG(salario),2) FROM funcionarios WHERE departamento_id IS NOT NULL`}
+ ]},
+ {tier:"Média", pts:30, qs:[
+  {t:"Departamentos bem pagos", p:`Mostre o nome do departamento e o salário médio dos seus funcionários (2 casas), apenas dos departamentos com média acima de 12000, da maior média para a menor.`, s:`SELECT d.nome, ROUND(AVG(f.salario),2) AS m FROM departamentos d JOIN funcionarios f ON f.departamento_id = d.id GROUP BY d.id, d.nome HAVING AVG(f.salario) > 12000 ORDER BY m DESC`, o:1},
+  {t:"Clientes paulistas", p:`Para cada cliente do estado <code>'SP'</code>, mostre o nome e quantos pedidos ele fez, incluindo quem não fez nenhum.`, s:`SELECT c.nome, COUNT(p.id) FROM clientes c LEFT JOIN pedidos p ON p.cliente_id = c.id WHERE c.estado = 'SP' GROUP BY c.id, c.nome`},
+  {t:"Unidades por categoria", p:`Mostre o nome de <b>todas</b> as categorias e a quantidade total de unidades vendidas de cada uma (considere todos os pedidos). Categorias sem vendas devem aparecer com <code>0</code>.`, s:`SELECT c.nome, COALESCE(SUM(i.quantidade),0) FROM categorias c LEFT JOIN produtos p ON p.categoria_id = c.id LEFT JOIN itens_pedido i ON i.produto_id = p.id GROUP BY c.id, c.nome`},
+  {t:"Vendas com desconto", p:`Liste os itens vendidos por um preço unitário diferente do preço de tabela do produto: nome do produto, <code>pedido_id</code>, preço de tabela e preço unitário cobrado.`, s:`SELECT p.nome, i.pedido_id, p.preco, i.preco_unitario FROM itens_pedido i JOIN produtos p ON p.id = i.produto_id WHERE i.preco_unitario <> p.preco`}
+ ]},
+ {tier:"Difícil", pts:50, qs:[
+  {t:"Melhor cliente por estado", p:`Considerando só pedidos <b>não cancelados</b>, mostre, para cada estado com compras, o estado, o nome do cliente que mais gastou nele e o total gasto (2 casas).`, s:`WITH g AS (SELECT c.estado, c.nome, SUM(i.quantidade * i.preco_unitario) AS total FROM clientes c JOIN pedidos p ON p.cliente_id = c.id JOIN itens_pedido i ON i.pedido_id = p.id WHERE p.status <> 'cancelado' GROUP BY c.id, c.estado, c.nome), r AS (SELECT *, RANK() OVER (PARTITION BY estado ORDER BY total DESC) AS rk FROM g) SELECT estado, nome, ROUND(total,2) FROM r WHERE rk = 1`},
+  {t:"Participação na receita", p:`Considerando só pedidos <b>não cancelados</b>, mostre o nome de cada categoria com vendas, sua receita (2 casas) e o percentual que ela representa da receita total (1 casa), da maior receita para a menor.`, s:`WITH r AS (SELECT c.nome, SUM(i.quantidade * i.preco_unitario) AS receita FROM itens_pedido i JOIN pedidos p ON p.id = i.pedido_id JOIN produtos pr ON pr.id = i.produto_id JOIN categorias c ON c.id = pr.categoria_id WHERE p.status <> 'cancelado' GROUP BY c.id, c.nome) SELECT nome, ROUND(receita,2), ROUND(100.0 * receita / SUM(receita) OVER (), 1) FROM r ORDER BY receita DESC`, o:1},
+  {t:"Intervalo entre compras", p:`Para cada pedido que <b>não</b> é o primeiro do seu cliente, mostre o nome do cliente, a <code>data_pedido</code> e quantos dias se passaram desde o pedido anterior do mesmo cliente (considere todos os pedidos). Ordene por nome do cliente e depois por data. Em SQLite, <code>julianday(data)</code> converte uma data em número de dias.`, s:`WITH x AS (SELECT c.nome, p.data_pedido, julianday(p.data_pedido) - julianday(LAG(p.data_pedido) OVER (PARTITION BY p.cliente_id ORDER BY p.data_pedido)) AS dias FROM pedidos p JOIN clientes c ON c.id = p.cliente_id) SELECT nome, data_pedido, CAST(dias AS INTEGER) FROM x WHERE dias IS NOT NULL ORDER BY nome, data_pedido`, o:1},
+  {t:"Níveis da hierarquia", p:`Mostre o nome de cada funcionário e seu nível na hierarquia: quem não tem gerente está no nível 0, seus subordinados diretos no nível 1, e assim por diante. Ordene por nível e depois por nome.`, s:`WITH RECURSIVE h(id, nome, nivel) AS (SELECT id, nome, 0 FROM funcionarios WHERE gerente_id IS NULL UNION ALL SELECT f.id, f.nome, h.nivel + 1 FROM funcionarios f JOIN h ON f.gerente_id = h.id) SELECT nome, nivel FROM h ORDER BY nivel, nome`, o:1}
+ ]}
+];
+SIM.forEach((g,gi)=>g.qs.forEach((q,qi)=>Object.assign(q,{id:`s${gi+1}-${qi+1}`, tier:g.tier, pts:g.pts, sim:true})));
+const SIMQ = SIM.flatMap(g=>g.qs);
 MODULES.forEach((m,mi)=>m.levels.forEach((l,li)=>{l.id=`m${mi+1}-${li+1}`;l.xp=m.xp;l.mi=mi;l.li=li;}));
 const ALL = MODULES.flatMap(m=>m.levels);
-const BY_ID = Object.fromEntries([...ALL,...BUGS].map(l=>[l.id,l]));
+const BY_ID = Object.fromEntries([...ALL,...BUGS,...SIMQ].map(l=>[l.id,l]));
 const RANKS = [["Calouro",0],["Estagiário",60],["Júnior",160],["Pleno",320],["Sênior",540],["Especialista",800],["DBA",1100],["Arquiteto de Dados",1450],["Staff Engineer",1850],["Lenda do SQL",2300]];
 const CHIPS = ["SELECT","FROM","WHERE","JOIN","LEFT JOIN","ON","GROUP BY","HAVING","ORDER BY","DESC","LIMIT","AS","AND","OR","NOT","IN","IS NULL","COUNT(*)","SUM()","AVG()","DISTINCT","CASE WHEN","THEN","ELSE","END","WITH","OVER ()","*",",","(",")","=","<>","'","%",";"];
 
 /* ============================== ESTADO ============================== */
 const KEY = "sql-arena-v1";
-let S = {xp:0, done:{}, drafts:{}, free:false, daily:{last:"",streak:0}, blitz:0};
+let S = {xp:0, done:{}, drafts:{}, free:false, daily:{last:"",streak:0}, blitz:0, sims:[]};
 try{ const raw = localStorage.getItem(KEY); if(raw) S = Object.assign(S, JSON.parse(raw)); }catch(e){}
 const save = ()=>{ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} };
 const today = ()=>{ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
@@ -518,9 +543,9 @@ let view = "inicio", cur = null, blitz = null, ptab = "missao", resetArmed = fal
 const VIEWS = [["inicio","Início"],["campanha","Campanha"],["bugs","Caça-bugs"],["playground","Playground"],["perfil","Perfil"]];
 
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2600); }
-function go(v){ if(v!=="jogar"){ stopBlitz(); } view=v; if(location.hash!=="#"+v) location.hash=v; else render(); window.scrollTo(0,0); }
+function go(v){ if(S.simRun && v!=="jogar"){ toast("Entregue o simulado antes de sair."); return; } if(v!=="jogar"){ stopBlitz(); } view=v; if(location.hash!=="#"+v) location.hash=v; else render(); window.scrollTo(0,0); }
 function renderChrome(){
-  const active = view==="jogar" ? (cur && cur.mode==="bug" ? "bugs" : cur && cur.mode==="camp" ? "campanha" : "inicio") : view;
+  const active = view==="simulado" ? "inicio" : view==="jogar" ? (cur && cur.mode==="bug" ? "bugs" : cur && cur.mode==="camp" ? "campanha" : "inicio") : view;
   $("#nav").innerHTML = VIEWS.map(([id,l])=>`<button data-go="${id}" ${id===active?'aria-current="page"':""}>${l}</button>`).join("");
   const r = rank(S.xp);
   $("#xpchip").innerHTML = `<div class="bar" title="${S.xp} XP"><i style="width:${r.pct}%"></i></div><span class="lv num">Nv ${r.n} · ${S.xp} XP</span>`;
@@ -573,6 +598,7 @@ function homeView(){
   <section class="modes">
     <button class="mode" data-go="campanha"><span class="tag">Modo principal</span><h3>Campanha</h3><p class="muted">Conceito, missão e correção automática. Cada módulo libera o próximo.</p><span class="foot">${doneN}/${ALL.length} fases concluídas</span></button>
     <button class="mode" data-act="blitz"><span class="tag">Contra o relógio</span><h3>Relâmpago</h3><p class="muted">5 minutos. Resolva o máximo de consultas sorteadas das fases liberadas.</p><span class="foot">Recorde: ${S.blitz} ${S.blitz===1?"acerto":"acertos"}</span></button>
+    <button class="mode" data-go="simulado"><span class="tag">Prova</span><h3>Simulado</h3><p class="muted">3 questões inéditas, da fácil à difícil, em 15 minutos. A correção só sai na entrega.</p><span class="foot">${(S.sims||[]).length?`Melhor nota: ${Math.max(...S.sims.map(x=>x.score))}/100`:"Nenhum simulado feito"}</span></button>
     <button class="mode" data-go="bugs"><span class="tag">Depuração</span><h3>Caça-bugs</h3><p class="muted">Consultas quebradas com erros reais de produção. Ache o defeito e conserte.</p><span class="foot">${BUGS.filter(b=>S.done[b.id]).length}/${BUGS.length} bugs corrigidos</span></button>
     <button class="mode" data-act="daily"><span class="tag">Uma por dia</span><h3>Desafio do dia</h3><p class="muted">Uma fase sorteada pela data. Vale 40 XP de bônus e mantém a sequência.</p><span class="foot">${dailyDone?"Feito hoje · ":""}Sequência: ${S.daily.streak} ${S.daily.streak===1?"dia":"dias"}</span></button>
     <button class="mode" data-go="playground"><span class="tag">Livre</span><h3>Playground</h3><p class="muted">Banco aberto para qualquer comando: teste ideias, crie tabelas, quebre coisas.</p><span class="foot">SQLite ${esc(sqliteVersion)}</span></button>
@@ -604,7 +630,7 @@ function profileView(){
     <div class="card"><span class="label">Números</span>
       <p class="num"><b>${ALL.filter(l=>S.done[l.id]).length}</b>/${ALL.length} fases · <b>${BUGS.filter(b=>S.done[b.id]).length}</b>/${BUGS.length} bugs</p>
       <p class="num"><b>${totalStars}</b>/${(ALL.length+BUGS.length)*3} estrelas</p>
-      <p class="num">Sequência diária: <b>${S.daily.streak}</b> · Recorde relâmpago: <b>${S.blitz}</b></p></div>
+      <p class="num">Sequência diária: <b>${S.daily.streak}</b> · Recorde relâmpago: <b>${S.blitz}</b></p><p class="num">Simulados: <b>${(S.sims||[]).length}</b> · Melhor nota: <b>${(S.sims||[]).length?Math.max(...S.sims.map(x=>x.score)):"—"}</b>/100</p></div>
   </div>
   <div class="card"><span class="label">Progresso por módulo</span>
     ${MODULES.map((m,mi)=>`<div class="prow"><span>${mi+1}. ${esc(m.name)}</span><div class="bar"><i style="width:${100*modDone(mi)/m.levels.length}%"></i></div><span class="num muted">${modDone(mi)}/${m.levels.length}</span></div>`).join("")}</div>
@@ -626,24 +652,31 @@ function profileView(){
   </div></div>`;
 }
 function playView(){
-  const l = cur.level, exp = expected(l), idx = l.bug ? "Bug "+(BUGS.indexOf(l)+1) : `Fase ${l.mi+1}.${l.li+1} · ${esc(MODULES[l.mi].name)}`;
-  const modeName = {camp:"Campanha", bug:"Caça-bugs", daily:"Desafio do dia", blitz:"Relâmpago"}[cur.mode];
+  const isSim = cur.mode==="sim"; if(isSim && ptab==="esperado") ptab="missao";
+  const l = cur.level, exp = expected(l), idx = isSim ? `Questão ${S.simRun.i+1} de 3 · ${l.tier} · ${l.pts} pts` : l.bug ? "Bug "+(BUGS.indexOf(l)+1) : `Fase ${l.mi+1}.${l.li+1} · ${esc(MODULES[l.mi].name)}`;
+  const modeName = {camp:"Campanha", bug:"Caça-bugs", daily:"Desafio do dia", blitz:"Relâmpago", sim:"Simulado"}[cur.mode];
   const body = ptab==="esquema" ? schemaHtml()
     : ptab==="esperado" ? `<p class="muted">${l.chk?"Estado do banco depois dos seus comandos:":"Seu resultado precisa ter estas linhas"+(l.o?", nesta ordem.":" (a ordem não importa).")} Os nomes das colunas não são conferidos.</p>${table(exp,60)}`
+    : isSim ? `<div class="task"><span class="label">Enunciado</span><p>${l.p}</p></div>
+       <p class="muted">Formato esperado: ${exp.columns.length} ${exp.columns.length===1?"coluna":"colunas"} e ${exp.values.length} ${exp.values.length===1?"linha":"linhas"}${l.o?", em ordem definida":", em qualquer ordem"}. Os nomes das colunas não são conferidos.</p>
+       <p class="muted">Sem dicas no simulado. Execute quantas vezes quiser; o veredito sai na entrega.</p>`
     : `${l.c?`<div class="concept"><span class="label">Conceito</span><div>${l.c}</div></div>`:""}
        <div class="task"><span class="label">Missão</span><p>${l.p}</p></div>
        ${cur.hint?`<div class="hint"><b>Dica:</b> ${l.h}</div>`:""}
        ${cur.sol?`<div class="sol"><span class="label">Solução de referência</span><pre>${esc(l.s)}</pre>${l.why?`<p style="margin-top:8px">${l.why}</p>`:""}</div>`:""}`;
-  const extra = cur.mode==="blitz" ? `<button class="btn small" data-act="skip">Pular</button>`
+  const extra = isSim ? `<button class="btn small" data-simq="${S.simRun.i-1}" ${S.simRun.i===0?"disabled":""}>← Anterior</button><button class="btn small" data-simq="${S.simRun.i+1}" ${S.simRun.i===2?"disabled":""}>Próxima →</button>${deliverArmed?`<button class="btn small" data-act="sim-cancel">Continuar</button><button class="btn primary small" data-act="sim-deliver">Confirmar entrega</button>`:`<button class="btn small" data-act="sim-deliver">Entregar</button>`}`
+    : cur.mode==="blitz" ? `<button class="btn small" data-act="skip">Pular</button>`
     : `${l.start?`<button class="btn small" data-act="restore">Restaurar</button>`:""}<button class="btn small" data-act="hint" ${cur.hint?"disabled":""}>Dica</button><button class="btn small" data-act="sol" ${cur.sol?"disabled":""}>Ver solução</button>`;
   return `<div class="stack">
-  <div class="play-head"><button class="btn small" data-act="back">← Voltar</button>
+  <div class="play-head">${isSim?"":`<button class="btn small" data-act="back">← Voltar</button>`}
     <div><span class="label">${modeName} · ${idx}</span><h1>${esc(l.t)}</h1></div>
-    ${cur.mode==="blitz"?`<span class="timer num" id="timer">${fmtTime(blitz.left)} · ${blitz.score} ✓</span>`:""}</div>
+    ${cur.mode==="blitz"?`<span class="timer num" id="timer">${fmtTime(blitz.left)} · ${blitz.score} ✓</span>`:""}
+    ${isSim?`<span class="timer num" id="timer">${fmtTime(simLeft())}</span>`:""}</div>
+  ${isSim?`<div class="row" role="tablist" aria-label="Questões do simulado">${S.simRun.ids.map((id,k)=>`<button role="tab" aria-selected="${k===S.simRun.i}" class="btn small ${k===S.simRun.i?"primary":""}" data-simq="${k}">${k+1}. ${BY_ID[id].tier}${S.simRun.drafts[k].trim()?" ●":""}</button>`).join("")}</div>`:""}
   <div class="bench">
-    <section class="panel"><div class="ptabs" role="tablist">${[["missao","Missão"],["esquema","Esquema"],["esperado","Esperado"]].map(([k,n])=>`<button role="tab" data-ptab="${k}" aria-selected="${ptab===k}">${n}</button>`).join("")}</div><div class="pbody" id="pbody">${body}</div></section>
+    <section class="panel"><div class="ptabs" role="tablist">${(isSim?[["missao","Questão"],["esquema","Esquema"]]:[["missao","Missão"],["esquema","Esquema"],["esperado","Esperado"]]).map(([k,n])=>`<button role="tab" data-ptab="${k}" aria-selected="${ptab===k}">${n}</button>`).join("")}</div><div class="pbody" id="pbody">${body}</div></section>
     <div class="stack">
-      <section class="panel">${editorHtml(cur.draft, "Executar e conferir").replace("%EXTRA%", extra)}</section>
+      <section class="panel">${editorHtml(cur.draft, isSim?"Executar":"Executar e conferir").replace("%EXTRA%", extra)}</section>
       <section class="panel"><div class="pbody" id="out"><span class="label">Resultado</span><p class="muted">Execute sua consulta para ver a saída aqui.</p></div></section>
     </div>
   </div></div>`;
@@ -666,7 +699,7 @@ function blitzEndView(){
 function render(){
   renderChrome();
   if(view==="jogar" && !cur) view="inicio";
-  app.innerHTML = view==="campanha"?mapView(): view==="bugs"?bugsView(): view==="perfil"?profileView(): view==="playground"?sandboxView(): view==="jogar"?playView(): view==="fim"?blitzEndView(): homeView();
+  app.innerHTML = view==="campanha"?mapView(): view==="bugs"?bugsView(): view==="perfil"?profileView(): view==="playground"?sandboxView(): view==="jogar"?playView(): view==="fim"?blitzEndView(): view==="simulado"?simView(): homeView();
 }
 
 /* ---------- jogo ---------- */
@@ -717,6 +750,12 @@ function nextAfter(){
 }
 function runPlay(){
   const sql = $("#sql").value, l = cur.level, out = $("#out");
+  if(cur.mode==="sim"){
+    if(!sql.trim()){ out.innerHTML = `<span class="label">Resultado</span><div class="err">Escreva uma consulta antes de executar.</div>`; return; }
+    try{ const {res} = runLevelSql(l, sql); out.innerHTML = `<span class="label">Sua saída</span><p class="muted">A correção sai na entrega.</p>${table(res)}`; }
+    catch(e){ out.innerHTML = `<span class="label">Resultado</span><div class="err">Erro: ${esc(e.message||e)}</div>`; }
+    return;
+  }
   const r = evaluate(l, sql);
   if(r.error){ out.innerHTML = `<span class="label">Resultado</span><div class="err">Erro: ${esc(r.error)}</div>`; return; }
   let head;
@@ -749,14 +788,82 @@ function insertText(txt){
   ta.focus(); ta.setSelectionRange(pos,pos); saveDraft();
 }
 function saveDraft(){ const ta=$("#sql"); if(!ta) return;
-  if(view==="playground") S.drafts.sandbox = ta.value; else if(cur){ cur.draft = ta.value; if(cur.mode!=="blitz") S.drafts[cur.level.id] = ta.value; }
+  if(view==="playground") S.drafts.sandbox = ta.value; else if(cur){ cur.draft = ta.value; if(cur.mode==="sim") S.simRun.drafts[S.simRun.i] = ta.value; else if(cur.mode!=="blitz") S.drafts[cur.level.id] = ta.value; }
   save(); }
+
+/* ---------- simulado ---------- */
+let simT = 0, simResult = null, deliverArmed = false;
+const simLeft = ()=> S.simRun ? Math.max(0, Math.ceil((S.simRun.deadline - Date.now())/1000)) : 0;
+function startSimTimer(){
+  clearInterval(simT);
+  simT = setInterval(()=>{ const left = simLeft(), el = $("#timer");
+    if(el && view==="jogar"){ el.textContent = fmtTime(left); el.style.color = left<=60 ? "var(--bad)" : ""; }
+    if(left<=0) finishSim(true); }, 500);
+}
+function startSim(){
+  const last = ((S.sims||[])[0]||{}).ids || [];
+  const ids = SIM.map(g=>{ let p = g.qs.filter(q=>!last.includes(q.id)); if(!p.length) p = g.qs; return p[Math.floor(Math.random()*p.length)].id; });
+  S.simRun = {ids, drafts:["","",""], i:0, deadline: Date.now() + SIM_SECS*1000}; save();
+  simResult = null; deliverArmed = false; ptab = "missao";
+  openSimQ(0); startSimTimer();
+}
+function openSimQ(i){
+  if(!S.simRun || i<0 || i>2) return;
+  S.simRun.i = i; save();
+  cur = {level: BY_ID[S.simRun.ids[i]], mode:"sim", hint:false, sol:false, draft: S.simRun.drafts[i]};
+  view = "jogar";
+  if(location.hash!=="#jogar") location.hash = "jogar"; else render();
+  window.scrollTo(0,0);
+}
+function finishSim(timeout){
+  const run = S.simRun; if(!run) return;
+  clearInterval(simT); simT = 0;
+  const before = rank(S.xp).n;
+  const secs = Math.min(SIM_SECS, Math.max(0, Math.round((Date.now() - (run.deadline - SIM_SECS*1000))/1000)));
+  const items = run.ids.map((id,k)=>{ const l = BY_ID[id], sql = run.drafts[k] || ""; let ok = false, msg = "";
+    if(!sql.trim()) msg = "Não respondida.";
+    else { const r = evaluate(l, sql); ok = !!r.ok; msg = r.error ? "Erro: "+r.error : (r.msg||""); }
+    return {id, sql, ok, msg, pts: ok ? l.pts : 0}; });
+  const score = items.reduce((a,x)=>a+x.pts, 0), xp = Math.round(score/2);
+  S.xp += xp;
+  S.sims = [{at:new Date().toISOString(), score, secs, ids:run.ids, timeout:!!timeout}, ...(S.sims||[])].slice(0,20);
+  delete S.simRun; save();
+  simResult = {items, score, secs, xp, timeout}; cur = null; deliverArmed = false; view = "simulado";
+  const after = rank(S.xp); if(after.n>before) toast(`Nível ${after.n}: ${after.name}`);
+  if(location.hash!=="#simulado") location.hash = "simulado"; else render();
+  window.scrollTo(0,0);
+}
+function simView(){
+  const r = simResult, sims = S.sims||[];
+  const res = !r ? "" : `<div class="card"><span class="label">${r.timeout?"Tempo esgotado · entregue automaticamente":"Simulado entregue"}</span>
+    <div class="row"><div class="big num">${r.score}/100</div><span class="muted num">${r.items.filter(x=>x.ok).length} de 3 corretas · tempo ${fmtTime(r.secs)} · +${r.xp} XP</span></div></div>
+    ${r.items.map((x,k)=>{ const l = BY_ID[x.id]; return `<div class="card">
+      <div class="row"><span class="label">${k+1}. ${l.tier} · ${l.pts} pts</span><b>${esc(l.t)}</b></div>
+      <div class="verdict ${x.ok?"ok":"bad"}" style="font-weight:500">${x.ok?`Correta · +${l.pts} pts`:esc(x.msg)}</div>
+      <p>${l.p}</p>
+      <span class="label">Sua resposta</span><div class="sol"><pre>${esc(x.sql.trim()||"(em branco)")}</pre></div>
+      <details class="t"><summary>Solução de referência e resultado esperado</summary><div class="pbody"><div class="sol"><pre>${esc(l.s)}</pre></div>${table(expected(l),40)}</div></details>
+    </div>`; }).join("")}`;
+  return `<div class="stack"><div class="row"><h1>Simulado</h1><span class="muted">3 questões exclusivas, da fácil à difícil, em 15 minutos.</span></div>
+  ${res}
+  <div class="grid2">
+    <div class="card"><span class="label">Como funciona</span>
+      <p>Cada prova sorteia uma questão <b>fácil</b> (20 pts), uma <b>média</b> (30 pts) e uma <b>difícil</b> (50 pts) de um banco de ${SIMQ.length} questões que não aparecem na campanha nem nos outros modos.</p>
+      <p>Você pode executar e ver a saída quantas vezes quiser e alternar entre as questões, mas o veredito só sai na entrega. Não há dicas. Quando os 15 minutos acabam, a prova é entregue sozinha.</p>
+      <p class="muted">Você ganha XP igual à metade da nota. A prova seguinte evita repetir as questões da anterior.</p>
+      <div class="row"><button class="btn primary" data-act="sim-start">${r?"Fazer outro simulado":"Começar simulado"}</button></div></div>
+    <div class="card"><span class="label">Histórico</span>
+      ${sims.length?`<div class="tbl"><table><thead><tr><th>Data</th><th>Nota</th><th>Tempo</th></tr></thead><tbody>${sims.map(x=>`<tr><td>${esc(new Date(x.at).toLocaleDateString("pt-BR"))}</td><td class="r">${x.score}</td><td class="r">${fmtTime(x.secs)}${x.timeout?" ⏱":""}</td></tr>`).join("")}</tbody></table></div>`:`<p class="muted">Nenhum simulado feito ainda. Seu histórico de notas aparece aqui.</p>`}
+    </div>
+  </div></div>`;
+}
 
 /* ---------- exportar / importar progresso ---------- */
 let importPending = null, importMsg = null, importDraft = "";
 const b64enc = s => { const u=new TextEncoder().encode(s); let b=""; for(let i=0;i<u.length;i+=8192) b+=String.fromCharCode.apply(null, u.subarray(i,i+8192)); return btoa(b); };
 const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s), c=>c.charCodeAt(0)));
-function exportCode(){ return "SQLA1:" + b64enc(JSON.stringify({app:"sql-arena", v:1, at:new Date().toISOString(), data:S})); }
+const exportData = ()=>({app:"sql-arena", v:1, at:new Date().toISOString(), data:Object.assign({}, S, {simRun:undefined})});
+function exportCode(){ return "SQLA1:" + b64enc(JSON.stringify(exportData())); }
 function parseImport(txt){
   txt = (txt||"").trim();
   if(!txt) throw new Error("Cole um código ou abra um arquivo primeiro.");
@@ -772,7 +879,8 @@ function parseImport(txt){
   const drafts = {};
   for(const [k,v] of Object.entries(d.drafts||{})) if((BY_ID[k]||k==="sandbox") && typeof v==="string") drafts[k]=v.slice(0,20000);
   const daily = d.daily && typeof d.daily.streak==="number" ? {last:String(d.daily.last||""), streak:Math.max(0,d.daily.streak|0)} : {last:"",streak:0};
-  return {at:obj.at, data:{xp:Math.floor(d.xp), done, drafts, free:!!d.free, daily, blitz:Math.max(0,(d.blitz|0))}};
+  const sims = Array.isArray(d.sims) ? d.sims.filter(x=>x && typeof x.score==="number").slice(0,20).map(x=>({at:String(x.at||""), score:Math.max(0,Math.min(100,x.score|0)), secs:Math.max(0,x.secs|0), ids:Array.isArray(x.ids)?x.ids.filter(i=>BY_ID[i]&&BY_ID[i].sim):[], timeout:!!x.timeout})) : [];
+  return {at:obj.at, data:{xp:Math.floor(d.xp), done, drafts, free:!!d.free, daily, blitz:Math.max(0,(d.blitz|0)), sims}};
 }
 function checkImport(txt){
   importDraft = txt;
@@ -798,6 +906,7 @@ document.addEventListener("click", e=>{
   if(d.go) return go(d.go);
   if(d.play) return startLevel(d.play);
   if(d.ins!==undefined) return insertText(d.ins);
+  if(d.simq!==undefined){ saveDraft(); deliverArmed=false; return openSimQ(+d.simq); }
   if(d.ptab){ ptab=d.ptab; saveDraft(); const keep=$("#out").innerHTML; render(); $("#out").innerHTML=keep; return; }
   switch(d.act){
     case "run": saveDraft(); return view==="playground" ? runSandbox() : runPlay();
@@ -810,12 +919,15 @@ document.addEventListener("click", e=>{
     case "sb-reset": if(sandbox) sandbox.close(); sandbox=freshDb(); $("#out").innerHTML=`<span class="label">Resultado</span><div class="verdict ok">Banco restaurado ao estado original.</div>`; return;
     case "free": S.free=!S.free; save(); return render();
     case "reset": if(!resetArmed){ resetArmed=true; return render(); }
-      S={xp:0,done:{},drafts:{},free:false,daily:{last:"",streak:0},blitz:0}; save(); resetArmed=false; toast("Progresso zerado"); return render();
+      S={xp:0,done:{},drafts:{},free:false,daily:{last:"",streak:0},blitz:0,sims:[]}; save(); resetArmed=false; toast("Progresso zerado"); return render();
     case "reset-cancel": resetArmed=false; return render();
+    case "sim-start": return startSim();
+    case "sim-deliver": { saveDraft(); if(!deliverArmed){ deliverArmed=true; const keep=$("#out").innerHTML; render(); $("#out").innerHTML=keep; return; } return finishSim(false); }
+    case "sim-cancel": { deliverArmed=false; const keep=$("#out").innerHTML; render(); $("#out").innerHTML=keep; return; }
     case "exp-copy": { const ta=$("#exp-code"), txt=ta.value;
       const fallback=()=>{ ta.focus(); ta.select(); toast("Código selecionado. Use Copiar do seu teclado."); };
       try{ navigator.clipboard.writeText(txt).then(()=>toast("Código copiado"), fallback); }catch(err){ fallback(); } return; }
-    case "exp-file": { const blob=new Blob([JSON.stringify({app:"sql-arena", v:1, at:new Date().toISOString(), data:S}, null, 2)], {type:"application/json"});
+    case "exp-file": { const blob=new Blob([JSON.stringify(exportData(), null, 2)], {type:"application/json"});
       const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`sql-arena-progresso-${today()}.json`;
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000); return; }
     case "imp-check": return checkImport($("#imp-code").value);
@@ -832,6 +944,7 @@ document.addEventListener("input", e=>{ if(e.target.id==="sql") saveDraft(); });
 window.addEventListener("hashchange", ()=>{
   const h = location.hash.slice(1) || "inicio";
   if(h==="jogar" && !cur){ location.hash="inicio"; return; }
+  if(S.simRun && h!=="jogar"){ toast("Entregue o simulado antes de sair."); location.hash="jogar"; return; }
   if(h!=="jogar" && h!=="fim" && blitz && blitz.t) stopBlitz();
   if(h!=="jogar") cur = h==="fim" ? null : cur;
   view = h; resetArmed=false; render();
@@ -840,7 +953,7 @@ window.addEventListener("hashchange", ()=>{
 /* ---------- autoteste (console): confere todas as soluções de referência ---------- */
 window.__selftest = function(){
   const bad = [];
-  for(const l of [...ALL,...BUGS]){
+  for(const l of [...ALL,...BUGS,...SIMQ]){
     try{
       const r = evaluate(l, l.s);
       if(!r.ok) bad.push(l.id+": solução reprovada: "+(r.error||r.msg));
@@ -864,7 +977,8 @@ let sqliteVersion = "";
     return;
   }
   const h = location.hash.slice(1);
-  view = VIEWS.some(v=>v[0]===h) ? h : "inicio";
+  view = VIEWS.some(v=>v[0]===h) || h==="simulado" ? h : "inicio";
+  if(S.simRun){ if(simLeft()<=0) finishSim(true); else { openSimQ(S.simRun.i); startSimTimer(); } return; }
   render();
 })();
 </script>

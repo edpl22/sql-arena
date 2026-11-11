@@ -17,6 +17,7 @@ Plataforma de treino de SQL que roda inteira no navegador, no computador e no ce
   10. Chefões (problemas no estilo de entrevista)
 - **Caça-bugs**: 9 consultas com defeitos clássicos (`= NULL`, `NOT IN` com NULL, LEFT JOIN anulado pelo WHERE, divisão inteira…).
 - **Relâmpago**: 5 minutos para resolver o máximo de consultas sorteadas.
+- **Simulado**: prova de 15 minutos com 3 questões exclusivas (fácil 20 pts, média 30, difícil 50), sorteadas de um banco de 12 que não aparece em outros modos. Correção só na entrega, com nota, gabarito e histórico.
 - **Desafio do dia**: uma fase por dia, com bônus de XP e sequência.
 - **Playground**: banco livre para qualquer comando.
 - XP, 10 níveis (de Calouro a Lenda do SQL), estrelas por fase e progresso salvo no navegador.
