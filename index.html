@@ -170,6 +170,10 @@ details.t .tbl{margin:0 12px 12px;max-height:220px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:10px}
 .big{font:700 34px/1 var(--display)}
 .prow{display:grid;grid-template-columns:minmax(0,1fr) 90px 44px;gap:10px;align-items:center;font-size:13.5px}
+.code-box{width:100%;min-height:76px;resize:vertical;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);color:var(--ink);
+  font:12px/1.45 var(--mono);padding:10px;word-break:break-all}
+.code-box:focus{outline:none;border-color:var(--accent)}
+label.btn{display:inline-block}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);
   padding:12px 18px;border-radius:10px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,.25);max-width:calc(100vw - 32px);text-align:center}
 .loading{padding:60px 16px;text-align:center;font-family:var(--mono);color:var(--muted)}
@@ -607,6 +611,18 @@ function profileView(){
   <div class="card"><span class="label">Ajustes</span>
     <div class="row"><button class="btn" data-act="free">${S.free?"Voltar ao desbloqueio por progresso":"Liberar todas as fases"}</button><span class="muted">${S.free?"Todas as fases estão abertas.":"Para quem já domina o básico e quer pular direto."}</span></div>
     <div class="row"><button class="btn" data-act="reset">${resetArmed?"Confirmar: apagar tudo":"Zerar progresso"}</button>${resetArmed?`<button class="btn ghost" data-act="reset-cancel">Cancelar</button>`:""}<span class="muted">O progresso fica salvo só neste navegador.</span></div>
+  </div>
+  <div class="card" id="transfer"><span class="label">Levar o progresso para outro navegador</span>
+    <p class="muted">Copie o código abaixo (ou baixe o arquivo) e, no outro aparelho, abra Perfil e cole aqui. Inclui XP, estrelas, rascunhos, sequência e recorde.</p>
+    <textarea id="exp-code" class="code-box" readonly aria-label="Código de exportação">${esc(exportCode())}</textarea>
+    <div class="row"><button class="btn primary" data-act="exp-copy">Copiar código</button><button class="btn" data-act="exp-file">Baixar arquivo .json</button></div>
+    <span class="label" style="margin-top:6px">Importar</span>
+    <textarea id="imp-code" class="code-box" placeholder="Cole aqui o código SQLA1:… ou o conteúdo do arquivo" aria-label="Código para importar">${esc(importDraft)}</textarea>
+    <div class="row">
+      ${importPending?`<button class="btn primary" data-act="imp-confirm">Substituir meu progresso</button><button class="btn ghost" data-act="imp-cancel">Cancelar</button>`
+        :`<button class="btn primary" data-act="imp-check">Importar</button><label class="btn" for="imp-file">Abrir arquivo…</label><input type="file" id="imp-file" accept=".json,application/json,text/plain" hidden>`}
+    </div>
+    ${importMsg?`<div class="verdict ${importMsg.ok?"ok":"bad"}" style="font-weight:500">${importMsg.html}</div>`:""}
   </div></div>`;
 }
 function playView(){
@@ -736,6 +752,45 @@ function saveDraft(){ const ta=$("#sql"); if(!ta) return;
   if(view==="playground") S.drafts.sandbox = ta.value; else if(cur){ cur.draft = ta.value; if(cur.mode!=="blitz") S.drafts[cur.level.id] = ta.value; }
   save(); }
 
+/* ---------- exportar / importar progresso ---------- */
+let importPending = null, importMsg = null, importDraft = "";
+const b64enc = s => { const u=new TextEncoder().encode(s); let b=""; for(let i=0;i<u.length;i+=8192) b+=String.fromCharCode.apply(null, u.subarray(i,i+8192)); return btoa(b); };
+const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s), c=>c.charCodeAt(0)));
+function exportCode(){ return "SQLA1:" + b64enc(JSON.stringify({app:"sql-arena", v:1, at:new Date().toISOString(), data:S})); }
+function parseImport(txt){
+  txt = (txt||"").trim();
+  if(!txt) throw new Error("Cole um código ou abra um arquivo primeiro.");
+  let obj;
+  try{
+    if(txt.startsWith("SQLA1:")) obj = JSON.parse(b64dec(txt.slice(6).replace(/\s+/g,"")));
+    else obj = JSON.parse(txt);
+  }catch(e){ throw new Error("Código ilegível. Copie de novo o código inteiro, começando por SQLA1:"); }
+  const d = obj && obj.app==="sql-arena" ? obj.data : null;
+  if(!d || typeof d.xp!=="number" || d.xp<0 || typeof d.done!=="object" || !d.done) throw new Error("Esse código não é um progresso do SQL Arena.");
+  const done = {};
+  for(const [k,v] of Object.entries(d.done)) if(BY_ID[k] && [1,2,3].includes(v)) done[k]=v;
+  const drafts = {};
+  for(const [k,v] of Object.entries(d.drafts||{})) if((BY_ID[k]||k==="sandbox") && typeof v==="string") drafts[k]=v.slice(0,20000);
+  const daily = d.daily && typeof d.daily.streak==="number" ? {last:String(d.daily.last||""), streak:Math.max(0,d.daily.streak|0)} : {last:"",streak:0};
+  return {at:obj.at, data:{xp:Math.floor(d.xp), done, drafts, free:!!d.free, daily, blitz:Math.max(0,(d.blitz|0))}};
+}
+function checkImport(txt){
+  importDraft = txt;
+  try{
+    const p = parseImport(txt); importPending = p;
+    const n = Object.keys(p.data.done).filter(k=>!k.startsWith("b")).length;
+    const when = p.at ? new Date(p.at).toLocaleString("pt-BR") : "data desconhecida";
+    importMsg = {ok:true, html:`Progresso encontrado: <b>${p.data.xp} XP</b>, ${n} fases, exportado em ${esc(when)}. Isso substitui o progresso deste navegador (${S.xp} XP).`};
+  }catch(e){ importPending = null; importMsg = {ok:false, html:esc(e.message)}; }
+  render(); document.getElementById("transfer").scrollIntoView({block:"nearest"});
+}
+document.addEventListener("change", e=>{
+  if(e.target.id!=="imp-file" || !e.target.files[0]) return;
+  const f = e.target.files[0];
+  if(f.size > 2e6){ importMsg={ok:false, html:"Arquivo grande demais para ser um progresso."}; return render(); }
+  f.text().then(checkImport);
+});
+
 /* ---------- eventos ---------- */
 document.addEventListener("click", e=>{
   const b = e.target.closest("button"); if(!b) return;
@@ -757,6 +812,15 @@ document.addEventListener("click", e=>{
     case "reset": if(!resetArmed){ resetArmed=true; return render(); }
       S={xp:0,done:{},drafts:{},free:false,daily:{last:"",streak:0},blitz:0}; save(); resetArmed=false; toast("Progresso zerado"); return render();
     case "reset-cancel": resetArmed=false; return render();
+    case "exp-copy": { const ta=$("#exp-code"), txt=ta.value;
+      const fallback=()=>{ ta.focus(); ta.select(); toast("Código selecionado. Use Copiar do seu teclado."); };
+      try{ navigator.clipboard.writeText(txt).then(()=>toast("Código copiado"), fallback); }catch(err){ fallback(); } return; }
+    case "exp-file": { const blob=new Blob([JSON.stringify({app:"sql-arena", v:1, at:new Date().toISOString(), data:S}, null, 2)], {type:"application/json"});
+      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`sql-arena-progresso-${today()}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000); return; }
+    case "imp-check": return checkImport($("#imp-code").value);
+    case "imp-cancel": importPending=null; importMsg=null; return render();
+    case "imp-confirm": S = importPending.data; save(); importPending=null; importDraft=""; importMsg={ok:true, html:`Progresso importado: ${S.xp} XP.`}; toast("Progresso importado"); return render();
   }
 });
 document.addEventListener("keydown", e=>{

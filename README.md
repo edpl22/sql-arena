@@ -20,6 +20,7 @@ Plataforma de treino de SQL que roda inteira no navegador, no computador e no ce
 - **Desafio do dia**: uma fase por dia, com bônus de XP e sequência.
 - **Playground**: banco livre para qualquer comando.
 - XP, 10 níveis (de Calouro a Lenda do SQL), estrelas por fase e progresso salvo no navegador.
+- **Exportar progresso**: no Perfil, copie um código (ou baixe um .json) e importe em outro navegador ou aparelho.
 
 ## Como rodar
 
