@@ -543,7 +543,7 @@ let view = "inicio", cur = null, blitz = null, ptab = "missao", resetArmed = fal
 const VIEWS = [["inicio","Início"],["campanha","Campanha"],["bugs","Caça-bugs"],["playground","Playground"],["perfil","Perfil"]];
 
 function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,2600); }
-function go(v){ if(S.simRun && v!=="jogar"){ toast("Entregue o simulado antes de sair."); return; } if(v!=="jogar"){ stopBlitz(); } view=v; if(location.hash!=="#"+v) location.hash=v; else render(); window.scrollTo(0,0); }
+function go(v){ if(v!=="jogar"){ stopBlitz(); } view=v; if(location.hash!=="#"+v) location.hash=v; else render(); window.scrollTo(0,0); }
 function renderChrome(){
   const active = view==="simulado" ? "inicio" : view==="jogar" ? (cur && cur.mode==="bug" ? "bugs" : cur && cur.mode==="camp" ? "campanha" : "inicio") : view;
   $("#nav").innerHTML = VIEWS.map(([id,l])=>`<button data-go="${id}" ${id===active?'aria-current="page"':""}>${l}</button>`).join("");
@@ -598,7 +598,7 @@ function homeView(){
   <section class="modes">
     <button class="mode" data-go="campanha"><span class="tag">Modo principal</span><h3>Campanha</h3><p class="muted">Conceito, missão e correção automática. Cada módulo libera o próximo.</p><span class="foot">${doneN}/${ALL.length} fases concluídas</span></button>
     <button class="mode" data-act="blitz"><span class="tag">Contra o relógio</span><h3>Relâmpago</h3><p class="muted">5 minutos. Resolva o máximo de consultas sorteadas das fases liberadas.</p><span class="foot">Recorde: ${S.blitz} ${S.blitz===1?"acerto":"acertos"}</span></button>
-    <button class="mode" data-go="simulado"><span class="tag">Prova</span><h3>Simulado</h3><p class="muted">3 questões inéditas, da fácil à difícil, em 15 minutos. A correção só sai na entrega.</p><span class="foot">${(S.sims||[]).length?`Melhor nota: ${Math.max(...S.sims.map(x=>x.score))}/100`:"Nenhum simulado feito"}</span></button>
+    <button class="mode" data-go="simulado"><span class="tag">Prova</span><h3>Simulado</h3><p class="muted">3 questões inéditas, da fácil à difícil, em cerca de 15 minutos. A correção só sai na entrega.</p><span class="foot">${S.simRun?`Em andamento · ${simClock()}`:(S.sims||[]).length?`Melhor nota: ${Math.max(...S.sims.map(x=>x.score))}/100`:"Nenhum simulado feito"}</span></button>
     <button class="mode" data-go="bugs"><span class="tag">Depuração</span><h3>Caça-bugs</h3><p class="muted">Consultas quebradas com erros reais de produção. Ache o defeito e conserte.</p><span class="foot">${BUGS.filter(b=>S.done[b.id]).length}/${BUGS.length} bugs corrigidos</span></button>
     <button class="mode" data-act="daily"><span class="tag">Uma por dia</span><h3>Desafio do dia</h3><p class="muted">Uma fase sorteada pela data. Vale 40 XP de bônus e mantém a sequência.</p><span class="foot">${dailyDone?"Feito hoje · ":""}Sequência: ${S.daily.streak} ${S.daily.streak===1?"dia":"dias"}</span></button>
     <button class="mode" data-go="playground"><span class="tag">Livre</span><h3>Playground</h3><p class="muted">Banco aberto para qualquer comando: teste ideias, crie tabelas, quebre coisas.</p><span class="foot">SQLite ${esc(sqliteVersion)}</span></button>
@@ -640,13 +640,13 @@ function profileView(){
   </div>
   <div class="card" id="transfer"><span class="label">Levar o progresso para outro navegador</span>
     <p class="muted">Copie o código abaixo (ou baixe o arquivo) e, no outro aparelho, abra Perfil e cole aqui. Inclui XP, estrelas, rascunhos, sequência e recorde.</p>
-    <textarea id="exp-code" class="code-box" readonly aria-label="Código de exportação">${esc(exportCode())}</textarea>
+    <textarea id="exp-code" class="code-box" aria-label="Código de exportação" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off">${esc(exportCode())}</textarea>
     <div class="row"><button class="btn primary" data-act="exp-copy">Copiar código</button><button class="btn" data-act="exp-file">Baixar arquivo .json</button></div>
     <span class="label" style="margin-top:6px">Importar</span>
-    <textarea id="imp-code" class="code-box" placeholder="Cole aqui o código SQLA1:… ou o conteúdo do arquivo" aria-label="Código para importar">${esc(importDraft)}</textarea>
+    <textarea id="imp-code" class="code-box" placeholder="Cole aqui o código SQLA1:… ou o conteúdo do arquivo" aria-label="Código para importar" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off">${esc(importDraft)}</textarea>
     <div class="row">
       ${importPending?`<button class="btn primary" data-act="imp-confirm">Substituir meu progresso</button><button class="btn ghost" data-act="imp-cancel">Cancelar</button>`
-        :`<button class="btn primary" data-act="imp-check">Importar</button><label class="btn" for="imp-file">Abrir arquivo…</label><input type="file" id="imp-file" accept=".json,application/json,text/plain" hidden>`}
+        :`<button class="btn primary" data-act="imp-check">Importar</button><label class="btn" for="imp-file">Abrir arquivo…</label><input type="file" id="imp-file" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1">`}
     </div>
     ${importMsg?`<div class="verdict ${importMsg.ok?"ok":"bad"}" style="font-weight:500">${importMsg.html}</div>`:""}
   </div></div>`;
@@ -668,10 +668,10 @@ function playView(){
     : cur.mode==="blitz" ? `<button class="btn small" data-act="skip">Pular</button>`
     : `${l.start?`<button class="btn small" data-act="restore">Restaurar</button>`:""}<button class="btn small" data-act="hint" ${cur.hint?"disabled":""}>Dica</button><button class="btn small" data-act="sol" ${cur.sol?"disabled":""}>Ver solução</button>`;
   return `<div class="stack">
-  <div class="play-head">${isSim?"":`<button class="btn small" data-act="back">← Voltar</button>`}
+  <div class="play-head">${isSim?`<button class="btn small" data-act="sim-leave">← Sair</button>`:`<button class="btn small" data-act="back">← Voltar</button>`}
     <div><span class="label">${modeName} · ${idx}</span><h1>${esc(l.t)}</h1></div>
     ${cur.mode==="blitz"?`<span class="timer num" id="timer">${fmtTime(blitz.left)} · ${blitz.score} ✓</span>`:""}
-    ${isSim?`<span class="timer num" id="timer">${fmtTime(simLeft())}</span>`:""}</div>
+    ${isSim?`<span class="timer num" id="timer" title="Tempo estimado: 15 minutos">${simClock()}</span>`:""}</div>
   ${isSim?`<div class="row" role="tablist" aria-label="Questões do simulado">${S.simRun.ids.map((id,k)=>`<button role="tab" aria-selected="${k===S.simRun.i}" class="btn small ${k===S.simRun.i?"primary":""}" data-simq="${k}">${k+1}. ${BY_ID[id].tier}${S.simRun.drafts[k].trim()?" ●":""}</button>`).join("")}</div>`:""}
   <div class="bench">
     <section class="panel"><div class="ptabs" role="tablist">${(isSim?[["missao","Questão"],["esquema","Esquema"]]:[["missao","Missão"],["esquema","Esquema"],["esperado","Esperado"]]).map(([k,n])=>`<button role="tab" data-ptab="${k}" aria-selected="${ptab===k}">${n}</button>`).join("")}</div><div class="pbody" id="pbody">${body}</div></section>
@@ -698,7 +698,7 @@ function blitzEndView(){
 }
 function render(){
   renderChrome();
-  if(view==="jogar" && !cur) view="inicio";
+  if(view==="jogar" && (!cur || (cur.mode==="sim" && !S.simRun))){ cur=null; view="inicio"; }
   app.innerHTML = view==="campanha"?mapView(): view==="bugs"?bugsView(): view==="perfil"?profileView(): view==="playground"?sandboxView(): view==="jogar"?playView(): view==="fim"?blitzEndView(): view==="simulado"?simView(): homeView();
 }
 
@@ -793,17 +793,21 @@ function saveDraft(){ const ta=$("#sql"); if(!ta) return;
 
 /* ---------- simulado ---------- */
 let simT = 0, simResult = null, deliverArmed = false;
-const simLeft = ()=> S.simRun ? Math.max(0, Math.ceil((S.simRun.deadline - Date.now())/1000)) : 0;
-function startSimTimer(){
+let discardArmed = false;
+const simElapsed = ()=> S.simRun ? (S.simRun.elapsed|0) : 0;
+function simClock(){ const e = simElapsed(); return e <= SIM_SECS ? `${fmtTime(e)} / ${fmtTime(SIM_SECS)}` : `+${fmtTime(e-SIM_SECS)} além dos ${SIM_SECS/60} min`; }
+function startSimTimer(){                         // o tempo só corre com a prova aberta e visível
   clearInterval(simT);
-  simT = setInterval(()=>{ const left = simLeft(), el = $("#timer");
-    if(el && view==="jogar"){ el.textContent = fmtTime(left); el.style.color = left<=60 ? "var(--bad)" : ""; }
-    if(left<=0) finishSim(true); }, 500);
+  simT = setInterval(()=>{
+    if(!S.simRun || view!=="jogar" || !cur || cur.mode!=="sim" || document.hidden) return;
+    S.simRun.elapsed = simElapsed() + 1; save();
+    const el = $("#timer"); if(el){ el.textContent = simClock(); el.style.color = simElapsed() > SIM_SECS ? "var(--bad)" : ""; }
+  }, 1000);
 }
 function startSim(){
   const last = ((S.sims||[])[0]||{}).ids || [];
   const ids = SIM.map(g=>{ let p = g.qs.filter(q=>!last.includes(q.id)); if(!p.length) p = g.qs; return p[Math.floor(Math.random()*p.length)].id; });
-  S.simRun = {ids, drafts:["","",""], i:0, deadline: Date.now() + SIM_SECS*1000}; save();
+  S.simRun = {ids, drafts:["","",""], i:0, elapsed:0}; save();
   simResult = null; deliverArmed = false; ptab = "missao";
   openSimQ(0); startSimTimer();
 }
@@ -811,32 +815,33 @@ function openSimQ(i){
   if(!S.simRun || i<0 || i>2) return;
   S.simRun.i = i; save();
   cur = {level: BY_ID[S.simRun.ids[i]], mode:"sim", hint:false, sol:false, draft: S.simRun.drafts[i]};
+  if(!simT) startSimTimer();
   view = "jogar";
   if(location.hash!=="#jogar") location.hash = "jogar"; else render();
   window.scrollTo(0,0);
 }
-function finishSim(timeout){
+function finishSim(){
   const run = S.simRun; if(!run) return;
   clearInterval(simT); simT = 0;
   const before = rank(S.xp).n;
-  const secs = Math.min(SIM_SECS, Math.max(0, Math.round((Date.now() - (run.deadline - SIM_SECS*1000))/1000)));
+  const secs = run.elapsed|0, over = secs > SIM_SECS;
   const items = run.ids.map((id,k)=>{ const l = BY_ID[id], sql = run.drafts[k] || ""; let ok = false, msg = "";
     if(!sql.trim()) msg = "Não respondida.";
     else { const r = evaluate(l, sql); ok = !!r.ok; msg = r.error ? "Erro: "+r.error : (r.msg||""); }
     return {id, sql, ok, msg, pts: ok ? l.pts : 0}; });
   const score = items.reduce((a,x)=>a+x.pts, 0), xp = Math.round(score/2);
   S.xp += xp;
-  S.sims = [{at:new Date().toISOString(), score, secs, ids:run.ids, timeout:!!timeout}, ...(S.sims||[])].slice(0,20);
+  S.sims = [{at:new Date().toISOString(), score, secs, ids:run.ids, over}, ...(S.sims||[])].slice(0,20);
   delete S.simRun; save();
-  simResult = {items, score, secs, xp, timeout}; cur = null; deliverArmed = false; view = "simulado";
+  simResult = {items, score, secs, xp, over}; cur = null; deliverArmed = false; discardArmed = false; view = "simulado";
   const after = rank(S.xp); if(after.n>before) toast(`Nível ${after.n}: ${after.name}`);
   if(location.hash!=="#simulado") location.hash = "simulado"; else render();
   window.scrollTo(0,0);
 }
 function simView(){
   const r = simResult, sims = S.sims||[];
-  const res = !r ? "" : `<div class="card"><span class="label">${r.timeout?"Tempo esgotado · entregue automaticamente":"Simulado entregue"}</span>
-    <div class="row"><div class="big num">${r.score}/100</div><span class="muted num">${r.items.filter(x=>x.ok).length} de 3 corretas · tempo ${fmtTime(r.secs)} · +${r.xp} XP</span></div></div>
+  const res = !r ? "" : `<div class="card"><span class="label">Simulado entregue${r.over?" · acima do tempo estimado":""}</span>
+    <div class="row"><div class="big num">${r.score}/100</div><span class="muted num">${r.items.filter(x=>x.ok).length} de 3 corretas · tempo ${fmtTime(r.secs)} (estimado ${fmtTime(SIM_SECS)}) · +${r.xp} XP</span></div></div>
     ${r.items.map((x,k)=>{ const l = BY_ID[x.id]; return `<div class="card">
       <div class="row"><span class="label">${k+1}. ${l.tier} · ${l.pts} pts</span><b>${esc(l.t)}</b></div>
       <div class="verdict ${x.ok?"ok":"bad"}" style="font-weight:500">${x.ok?`Correta · +${l.pts} pts`:esc(x.msg)}</div>
@@ -844,16 +849,22 @@ function simView(){
       <span class="label">Sua resposta</span><div class="sol"><pre>${esc(x.sql.trim()||"(em branco)")}</pre></div>
       <details class="t"><summary>Solução de referência e resultado esperado</summary><div class="pbody"><div class="sol"><pre>${esc(l.s)}</pre></div>${table(expected(l),40)}</div></details>
     </div>`; }).join("")}`;
-  return `<div class="stack"><div class="row"><h1>Simulado</h1><span class="muted">3 questões exclusivas, da fácil à difícil, em 15 minutos.</span></div>
+  return `<div class="stack"><div class="row"><h1>Simulado</h1><span class="muted">3 questões exclusivas, da fácil à difícil, em cerca de 15 minutos.</span></div>
+  ${S.simRun?`<div class="card"><span class="label">Simulado em andamento</span>
+    <p>Questão ${S.simRun.i+1} de 3 · ${S.simRun.drafts.filter(x=>x.trim()).length} de 3 com resposta · tempo ${simClock()}</p>
+    <div class="row"><button class="btn primary" data-act="sim-resume">Continuar</button>
+      ${deliverArmed?`<button class="btn primary" data-act="sim-deliver">Confirmar entrega</button><button class="btn ghost" data-act="sim-cancel">Cancelar</button>`:`<button class="btn" data-act="sim-deliver">Entregar agora</button>`}
+      ${discardArmed?`<button class="btn" data-act="sim-discard">Confirmar: descartar sem nota</button><button class="btn ghost" data-act="sim-discard-cancel">Cancelar</button>`:`<button class="btn ghost" data-act="sim-discard">Descartar</button>`}</div></div>`:""}
   ${res}
   <div class="grid2">
     <div class="card"><span class="label">Como funciona</span>
       <p>Cada prova sorteia uma questão <b>fácil</b> (20 pts), uma <b>média</b> (30 pts) e uma <b>difícil</b> (50 pts) de um banco de ${SIMQ.length} questões que não aparecem na campanha nem nos outros modos.</p>
-      <p>Você pode executar e ver a saída quantas vezes quiser e alternar entre as questões, mas o veredito só sai na entrega. Não há dicas. Quando os 15 minutos acabam, a prova é entregue sozinha.</p>
+      <p>Você pode executar e ver a saída quantas vezes quiser e alternar entre as questões, mas o veredito só sai na entrega. Não há dicas.</p>
+      <p>Os 15 minutos são uma estimativa: o relógio continua contando depois disso e nada é entregue sozinho. Você pode sair e voltar quando quiser; o tempo só corre com a prova aberta.</p>
       <p class="muted">Você ganha XP igual à metade da nota. A prova seguinte evita repetir as questões da anterior.</p>
-      <div class="row"><button class="btn primary" data-act="sim-start">${r?"Fazer outro simulado":"Começar simulado"}</button></div></div>
+      ${S.simRun?"":`<div class="row"><button class="btn primary" data-act="sim-start">${r?"Fazer outro simulado":"Começar simulado"}</button></div>`}</div>
     <div class="card"><span class="label">Histórico</span>
-      ${sims.length?`<div class="tbl"><table><thead><tr><th>Data</th><th>Nota</th><th>Tempo</th></tr></thead><tbody>${sims.map(x=>`<tr><td>${esc(new Date(x.at).toLocaleDateString("pt-BR"))}</td><td class="r">${x.score}</td><td class="r">${fmtTime(x.secs)}${x.timeout?" ⏱":""}</td></tr>`).join("")}</tbody></table></div>`:`<p class="muted">Nenhum simulado feito ainda. Seu histórico de notas aparece aqui.</p>`}
+      ${sims.length?`<div class="tbl"><table><thead><tr><th>Data</th><th>Nota</th><th>Tempo</th></tr></thead><tbody>${sims.map(x=>`<tr><td>${esc(new Date(x.at).toLocaleDateString("pt-BR"))}</td><td class="r">${x.score}</td><td class="r">${fmtTime(x.secs)}${(x.over||x.timeout)?" ⏱":""}</td></tr>`).join("")}</tbody></table></div>`:`<p class="muted">Nenhum simulado feito ainda. Seu histórico de notas aparece aqui.</p>`}
     </div>
   </div></div>`;
 }
@@ -865,13 +876,22 @@ const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s), c=>c.charC
 const exportData = ()=>({app:"sql-arena", v:1, at:new Date().toISOString(), data:Object.assign({}, S, {simRun:undefined})});
 function exportCode(){ return "SQLA1:" + b64enc(JSON.stringify(exportData())); }
 function parseImport(txt){
-  txt = (txt||"").trim();
+  txt = (txt||"").replace(/^﻿/, "").trim();
   if(!txt) throw new Error("Cole um código ou abra um arquivo primeiro.");
-  let obj;
-  try{
-    if(txt.startsWith("SQLA1:")) obj = JSON.parse(b64dec(txt.slice(6).replace(/\s+/g,"")));
-    else obj = JSON.parse(txt);
-  }catch(e){ throw new Error("Código ilegível. Copie de novo o código inteiro, começando por SQLA1:"); }
+  let obj = null;
+  // 1) conteúdo do arquivo .json (ou JSON colado)
+  const brace = txt.indexOf("{");
+  if(brace>=0 && !/SQLA1/i.test(txt.slice(0,brace))){ try{ obj = JSON.parse(txt.slice(brace, txt.lastIndexOf("}")+1)); }catch(e){} }
+  // 2) código SQLA1, tolerando texto em volta, quebras de linha, espaços, base64 de URL e "=" removido
+  if(!obj){
+    const m = txt.match(/SQLA1\s*:\s*([A-Za-z0-9+/_\-=\s]+)/i);
+    let b = (m ? m[1] : txt).replace(/[\s=]+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+    if(!/^[A-Za-z0-9+/]+$/.test(b)) throw new Error("Esse texto não parece um código do SQL Arena. Ele começa com SQLA1: seguido de letras e números.");
+    if(b.length % 4 === 1) throw new Error("O código está incompleto (faltam caracteres no final). Copie de novo o código inteiro.");
+    b += "=".repeat((4 - b.length % 4) % 4);
+    try{ obj = JSON.parse(b64dec(b)); }
+    catch(e){ throw new Error(`O código está incompleto ou foi alterado (${b.replace(/=+$/,"").length} caracteres recebidos). Copie de novo o código inteiro, de SQLA1: até o fim.`); }
+  }
   const d = obj && obj.app==="sql-arena" ? obj.data : null;
   if(!d || typeof d.xp!=="number" || d.xp<0 || typeof d.done!=="object" || !d.done) throw new Error("Esse código não é um progresso do SQL Arena.");
   const done = {};
@@ -879,7 +899,7 @@ function parseImport(txt){
   const drafts = {};
   for(const [k,v] of Object.entries(d.drafts||{})) if((BY_ID[k]||k==="sandbox") && typeof v==="string") drafts[k]=v.slice(0,20000);
   const daily = d.daily && typeof d.daily.streak==="number" ? {last:String(d.daily.last||""), streak:Math.max(0,d.daily.streak|0)} : {last:"",streak:0};
-  const sims = Array.isArray(d.sims) ? d.sims.filter(x=>x && typeof x.score==="number").slice(0,20).map(x=>({at:String(x.at||""), score:Math.max(0,Math.min(100,x.score|0)), secs:Math.max(0,x.secs|0), ids:Array.isArray(x.ids)?x.ids.filter(i=>BY_ID[i]&&BY_ID[i].sim):[], timeout:!!x.timeout})) : [];
+  const sims = Array.isArray(d.sims) ? d.sims.filter(x=>x && typeof x.score==="number").slice(0,20).map(x=>({at:String(x.at||""), score:Math.max(0,Math.min(100,x.score|0)), secs:Math.max(0,x.secs|0), ids:Array.isArray(x.ids)?x.ids.filter(i=>BY_ID[i]&&BY_ID[i].sim):[], over:!!(x.over||x.timeout)})) : [];
   return {at:obj.at, data:{xp:Math.floor(d.xp), done, drafts, free:!!d.free, daily, blitz:Math.max(0,(d.blitz|0)), sims}};
 }
 function checkImport(txt){
@@ -896,7 +916,15 @@ document.addEventListener("change", e=>{
   if(e.target.id!=="imp-file" || !e.target.files[0]) return;
   const f = e.target.files[0];
   if(f.size > 2e6){ importMsg={ok:false, html:"Arquivo grande demais para ser um progresso."}; return render(); }
-  f.text().then(checkImport);
+  const rd = new FileReader();
+  rd.onload = ()=> checkImport(String(rd.result||""));
+  rd.onerror = ()=>{ importMsg={ok:false, html:"Não foi possível ler o arquivo. Tente colar o código."}; render(); };
+  rd.readAsText(f);
+});
+// colar o código já confere automaticamente
+document.addEventListener("paste", e=>{
+  if(e.target.id!=="imp-code") return;
+  setTimeout(()=>{ const ta=$("#imp-code"); if(ta && ta.value.trim()) checkImport(ta.value); }, 0);
 });
 
 /* ---------- eventos ---------- */
@@ -922,11 +950,18 @@ document.addEventListener("click", e=>{
       S={xp:0,done:{},drafts:{},free:false,daily:{last:"",streak:0},blitz:0,sims:[]}; save(); resetArmed=false; toast("Progresso zerado"); return render();
     case "reset-cancel": resetArmed=false; return render();
     case "sim-start": return startSim();
-    case "sim-deliver": { saveDraft(); if(!deliverArmed){ deliverArmed=true; const keep=$("#out").innerHTML; render(); $("#out").innerHTML=keep; return; } return finishSim(false); }
-    case "sim-cancel": { deliverArmed=false; const keep=$("#out").innerHTML; render(); $("#out").innerHTML=keep; return; }
-    case "exp-copy": { const ta=$("#exp-code"), txt=ta.value;
-      const fallback=()=>{ ta.focus(); ta.select(); toast("Código selecionado. Use Copiar do seu teclado."); };
-      try{ navigator.clipboard.writeText(txt).then(()=>toast("Código copiado"), fallback); }catch(err){ fallback(); } return; }
+    case "sim-deliver": { if(view==="jogar") saveDraft(); if(!deliverArmed){ deliverArmed=true; const o=$("#out"), keep=o&&o.innerHTML; render(); if(o) $("#out").innerHTML=keep; return; } return finishSim(); }
+    case "sim-cancel": { deliverArmed=false; const o=$("#out"), keep=o&&o.innerHTML; render(); if(o) $("#out").innerHTML=keep; return; }
+    case "sim-leave": saveDraft(); deliverArmed=false; cur=null; return go("simulado");
+    case "sim-resume": deliverArmed=false; discardArmed=false; return openSimQ(S.simRun.i);
+    case "sim-discard": if(!discardArmed){ discardArmed=true; deliverArmed=false; return render(); }
+      delete S.simRun; save(); discardArmed=false; toast("Simulado descartado"); return render();
+    case "sim-discard-cancel": discardArmed=false; return render();
+    case "exp-copy": { const ta=$("#exp-code"); ta.value = exportCode(); const txt=ta.value;
+      const legacy=()=>{ ta.focus(); ta.select(); ta.setSelectionRange(0, txt.length);
+        let ok=false; try{ ok=document.execCommand("copy"); }catch(err){}
+        toast(ok ? `Código copiado (${txt.length} caracteres)` : "Código selecionado. Toque e segure para copiar."); };
+      try{ navigator.clipboard.writeText(txt).then(()=>toast(`Código copiado (${txt.length} caracteres)`), legacy); }catch(err){ legacy(); } return; }
     case "exp-file": { const blob=new Blob([JSON.stringify(exportData(), null, 2)], {type:"application/json"});
       const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`sql-arena-progresso-${today()}.json`;
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 4000); return; }
@@ -944,7 +979,6 @@ document.addEventListener("input", e=>{ if(e.target.id==="sql") saveDraft(); });
 window.addEventListener("hashchange", ()=>{
   const h = location.hash.slice(1) || "inicio";
   if(h==="jogar" && !cur){ location.hash="inicio"; return; }
-  if(S.simRun && h!=="jogar"){ toast("Entregue o simulado antes de sair."); location.hash="jogar"; return; }
   if(h!=="jogar" && h!=="fim" && blitz && blitz.t) stopBlitz();
   if(h!=="jogar") cur = h==="fim" ? null : cur;
   view = h; resetArmed=false; render();
@@ -978,7 +1012,8 @@ let sqliteVersion = "";
   }
   const h = location.hash.slice(1);
   view = VIEWS.some(v=>v[0]===h) || h==="simulado" ? h : "inicio";
-  if(S.simRun){ if(simLeft()<=0) finishSim(true); else { openSimQ(S.simRun.i); startSimTimer(); } return; }
+  if(S.simRun){ S.simRun.elapsed = S.simRun.elapsed|0; delete S.simRun.deadline; if(view==="jogar"){ openSimQ(S.simRun.i); return; } }
+  if(view==="jogar") view = "inicio";
   render();
 })();
 </script>
